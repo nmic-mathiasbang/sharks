@@ -174,11 +174,11 @@ export function SimplePitchChat({
 
       // Remove loading message
       setMessages(prev => prev.filter(msg => msg.id !== loadingId));
-      
+
       // Handle streaming response
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      
+
       if (!reader) {
         throw new Error('No response body reader available');
       }
@@ -203,14 +203,14 @@ export function SimplePitchChat({
                   // For non-autonomous mode, show "analyzing..." status
                   if (analysisMode !== 'autonomous') {
                     const startContent = eventData.agent + " is analyzing...";
-                    currentAgentMessageId = addMessage(
-                      'assistant', 
-                      startContent, 
-                      false, 
-                      eventData.agent,
-                      eventData.colors,
-                      true
-                    );
+                  currentAgentMessageId = addMessage(
+                    'assistant', 
+                    startContent, 
+                    false, 
+                    eventData.agent,
+                    eventData.colors,
+                    true
+                  );
                   }
                   // For autonomous mode, just track the agent but don't add a message yet
                   break;
@@ -336,145 +336,362 @@ export function SimplePitchChat({
 
   return (
     <div className="flex h-screen bg-[#e5ddd5] text-[#111b21]">
-      {/* Left Sidebar - Chat List */}
-      <div className="w-[20%] bg-white border-r border-[#e5e7eb] flex flex-col">
-        {/* Sidebar Header */}
-        <div className="p-4 bg-[#f0f2f5] border-b border-[#e5e7eb]">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full overflow-hidden">
-              <img
-                src="/assets/investors/chatprofile.png"
-                alt="Løvens Hule Group"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // Fallback to the green circle with Users icon if image fails
-                  e.currentTarget.style.display = 'none';
-                  const container = e.currentTarget.parentElement;
-                  if (container && !container.querySelector('.fallback-group-icon')) {
-                    const fallback = document.createElement('div');
-                    fallback.className = 'fallback-group-icon w-10 h-10 bg-[#25d366] rounded-full flex items-center justify-center';
-                    fallback.innerHTML = '<svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zM4 18v-4h3v4H4zM13 2v2c0 1.1-.9 2-2 2s-2-.9-2-2V2h4zM12 6c2.21 0 4 1.79 4 4 0 1.67-1 3.11-2.4 3.73v2.26h-3.2v-2.26C9 13.11 8 11.67 8 10c0-2.21 1.79-4 4-4z"/></svg>';
-                    container.appendChild(fallback);
-                  }
-                }}
-              />
-            </div>
-            <div>
-              <h2 className="font-medium text-[#111b21]">Løvens Hule</h2>
-              <p className="text-xs text-[#667781]">
-                {analysisMode === 'autonomous' ? 'Investor Diskussion' : 'Pitch Analyse'}
-              </p>
-            </div>
+      {/* Left Icon Menu */}
+      <div className="w-20 bg-[#f5f5f5] border-r border-[#e5e7eb] flex flex-col">
+        {/* macOS Traffic Light Buttons */}
+        <div className="flex items-center gap-2 p-3">
+          <div className="w-3 h-3 bg-[#ff5f57] rounded-full hover:bg-[#ff3b30] cursor-pointer"></div>
+          <div className="w-3 h-3 bg-[#ffbd2e] rounded-full hover:bg-[#ff9500] cursor-pointer"></div>
+          <div className="w-3 h-3 bg-[#28ca42] rounded-full hover:bg-[#30d158] cursor-pointer"></div>
+        </div>
+
+        {/* Menu Icons */}
+        <div className="flex flex-col items-center pt-4 space-y-6">
+          {/* Chat Icon - Active */}
+          <div className="w-12 h-12 bg-[#e0e0e0] rounded-xl flex items-center justify-center text-[#333333] cursor-pointer shadow-sm">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h4l4 4 4-4h4c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+            </svg>
+          </div>
+
+          {/* Phone Icon */}
+          <div className="w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#007aff] cursor-pointer">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M6.62 10.79c1.44 2.83 3.76 5.14 6.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+          </div>
+
+          {/* TableTalk Icon */}
+          <div className="w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#007aff] cursor-pointer">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+          </div>
+
+          {/* Archive Icon */}
+          <div className="w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#007aff] cursor-pointer">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+            </svg>
+          </div>
+
+          {/* Starred Icon */}
+          <div className="w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#007aff] cursor-pointer">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
+            </svg>
           </div>
         </div>
 
-        {/* Agent List */}
+        {/* Settings Icon at Bottom */}
+        <div className="flex-1"></div>
+        <div className="pb-4 flex justify-center">
+          <div className="w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#007aff] cursor-pointer">
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+              <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Chat Sidebar */}
+      <div className="w-[30%] bg-white border-r border-[#e5e7eb] flex flex-col">
+        {/* WhatsApp-style Header */}
+        <div className="p-4 bg-white border-b border-[#e5e7eb]">
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-2xl font-bold text-[#111b21]">Chats</h1>
+          <div className="flex items-center gap-3">
+              {/* New Chat Icon */}
+              <div className="w-6 h-6 cursor-pointer text-[#8696a0] hover:text-[#111b21]">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M19.005 3.175H4.674C3.642 3.175 3 3.789 3 4.821V21.02l3.544-3.514h12.461c1.033 0 2.064-1.06 2.064-2.093V4.821c-.001-1.032-1.032-1.646-2.064-1.646zm-4.989 9.869H7.041V11.1h6.975v1.944zm3-4H7.041V7.1h9.975v1.944z"/>
+                </svg>
+              </div>
+              {/* Menu Icon */}
+              <div className="w-6 h-6 cursor-pointer text-[#8696a0] hover:text-[#111b21]">
+                <svg viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 7a2 2 0 1 0-.001-4.001A2 2 0 0 0 12 7zm0 2a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 9zm0 6a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 15z"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+          
+          {/* Search Bar */}
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <svg className="h-4 w-4 text-[#8696a0]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              placeholder="Søg"
+              className="w-full pl-10 pr-4 py-2 bg-[#f0f2f5] border border-transparent rounded-lg text-sm text-[#111b21] placeholder-[#8696a0] focus:outline-none focus:ring-2 focus:ring-[#00a884] focus:border-transparent"
+            />
+          </div>
+        </div>
+
+        {/* Chat List */}
         <div className="flex-1 overflow-y-auto">
-          <div className="p-3">
-            <div className="text-xs text-[#667781] mb-3 uppercase tracking-wide">Løvens Hule Investorer</div>
-            {[
-              { name: 'Jakob Risgaard', icon: DollarSign, status: 'analyserer forretningsmodel' },
-              { name: 'Jesper Buch', icon: TrendingUp, status: 'vurderer marked & konkurrence' },
-              { name: 'Jan Lehrmann', icon: Presentation, status: 'gennemgår finansielle tal' },
-              { name: 'Christian Stadil', icon: Users, status: 'evaluerer team & execution' },
-              { name: 'Tahir Siddique', icon: Target, status: 'bedømmer pitch kvalitet' },
-              { name: 'Investment Committee Lead', icon: Bot, status: 'synthesizing insights' }
-            ].map((agent, index) => {
-              const agentColors = AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS] || { background: '#f3f4f6', text: '#6b7280' };
+          {/* Group Chat - Single entry with overlapping profile images - ACTIVE */}
+          <div className="flex items-center gap-3 px-4 py-3 bg-[#f0f2f5] cursor-pointer border-b border-[#e5e7eb]">
+            <div className="relative w-12 h-12">
+              {/* Overlapping profile images */}
+              <div className="relative w-12 h-12">
+                {/* Back row - 3 images */}
+                <img
+                  src={getInvestorAvatar('Jakob Risgaard')}
+                  alt="Jakob Risgaard"
+                  className="absolute top-0 left-0 w-7 h-7 rounded-full object-cover border-2 border-white z-10"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <img
+                  src={getInvestorAvatar('Jesper Buch')}
+                  alt="Jesper Buch"
+                  className="absolute top-0 right-0 w-7 h-7 rounded-full object-cover border-2 border-white z-10"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <img
+                  src={getInvestorAvatar('Jan Lehrmann')}
+                  alt="Jan Lehrmann"
+                  className="absolute bottom-0 left-1 w-7 h-7 rounded-full object-cover border-2 border-white z-10"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                
+                {/* Front row - 2 images */}
+                <img
+                  src={getInvestorAvatar('Christian Stadil')}
+                  alt="Christian Stadil"
+                  className="absolute bottom-0 right-1 w-7 h-7 rounded-full object-cover border-2 border-white z-20"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                
+                {/* +1 indicator for remaining member */}
+                <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#111b21] rounded-full flex items-center justify-center text-white text-xs font-medium border border-white z-30">
+                  +2
+                </div>
+              </div>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between">
+                <h3 className="text-[#111b21] text-base font-normal truncate">Løverne</h3>
+                <span className="text-xs text-[#8696a0] flex-shrink-0 ml-2">now</span>
+              </div>
+              <p className="text-sm text-[#8696a0] truncate">Diskuterer dit pitch...</p>
+            </div>
+          </div>
+
+          {/* Danish Celebrities Contacts */}
+          {[
+            
+            { 
+              name: 'Jeppe Hamming', 
+              lastMessage: 'Er du klar til vores webinar næste uge?', 
+              time: 'Torsdag',
+              hasUnread: false
+            },
+            { 
+              name: 'Kwadwo P. Swiatecki Adu', 
+              lastMessage: 'Er du ved at være klar til hackathon?🤘🏼', 
+              time: 'søndag',
+              hasUnread: false
+            },
+            { 
+              name: 'Frederik 10.', 
+              lastMessage: 'Hvad siger du til Frederikshvile projektet?🤔', 
+              time: 'lørdag',
+              hasUnread: false
+            },
+            { 
+              name: 'Christian Stadil', 
+              lastMessage: 'Og af den grund er jeg ude!', 
+              time: 'Torsdag',
+              hasUnread: false
+            },
+            { 
+              name: 'Caroline Stage Olsen', 
+              lastMessage: 'Hvad skal Danmarks nye app hedde? 📱', 
+              time: '12.46',
+              hasUnread: false
+            },
+            { 
+              name: 'Magnus Thorslund', 
+              lastMessage: 'Gir du tapas, hvis jeg kommer på besøg?', 
+              time: '30.07.2025',
+              hasUnread: false
+            },
+            { 
+              name: 'Fabrizio Romano', 
+              lastMessage: 'To stay in Barcelona - Here we go!💯🇪🇸', 
+              time: 'fredag',
+              hasUnread: false
+            },
+            { 
+              name: 'Mor ❤️', 
+              lastMessage: 'Hej skatter, hvordan går det med dig?🥰', 
+              time: 'mandag',
+              hasUnread: true,
+              isMuted: true
+            },
+            { 
+              name: 'Sam Altman', 
+              lastMessage: 'Do you want pre-access for GPT-5?🤖💸', 
+              time: '30.07.2025',
+              hasUnread: false
+            },
+            { 
+              name: 'Mark Zuckerberg', 
+              lastMessage: 'Last offer: 300M$💸', 
+              time: '30.07.2025',
+              hasUnread: false
+            }
+            
+          ].map((contact, index) => {
+            // Generate fallback colors based on name
+            const getContactColor = (name: string) => {
+              const colors = [
+                '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3',
+                '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39',
+                '#ffeb3b', '#ffc107', '#ff9800', '#ff5722', '#795548'
+              ];
+              const hash = name.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+              return colors[hash % colors.length];
+            };
+
+            const contactColor = getContactColor(contact.name);
+            const initials = contact.name.split(' ').map(n => n[0]).join('').substring(0, 2);
+            
+            // Map contact names to their actual image filenames
+            const getContactImage = (name: string) => {
+              const imageMap: { [key: string]: string } = {
+                'Jeppe Hamming': '/assets/contact/jeppe.jpeg',
+                'Kwadwo P. Swiatecki Adu': '/assets/contact/Kwadwo%20Adu.png',
+                'Frederik 10.': '/assets/contact/frederik%2010.jpg',
+                'Christian Stadil': '/assets/contact/christian%20stadil.webp',
+                'Caroline Stage Olsen': '/assets/contact/Stage%20olsen.jpeg',
+                'Magnus Thorslund': '/assets/contact/magnus_thorslund.webp',
+                'Fabrizio Romano': '/assets/contact/fabricio.jpg',
+                'Mor ❤️': '/assets/contact/Mor.jpg',
+                'Sam Altman': '/assets/contact/sam%20altman.jpg',
+                'Mark Zuckerberg': '/assets/contact/Mark%20zuck.jpg'
+              };
+              
+              return imageMap[name] || '/assets/contact/default.jpg';
+            };
               
               return (
-                <div key={index} className="flex items-center gap-3 p-3 hover:bg-[#f5f6fa] rounded-lg cursor-pointer">
-                  <div className="relative w-12 h-12">
-                    <img
-                      src={getInvestorAvatar(agent.name)}
-                      alt={agent.name}
-                      className="w-12 h-12 rounded-full object-cover border-2 border-[#e5e7eb]"
-                      onError={(e) => {
-                        // Fallback to icon background if image fails to load
-                        e.currentTarget.style.display = 'none';
-                        const container = e.currentTarget.parentElement;
-                        if (container && !container.querySelector('.fallback-icon')) {
-                          const fallback = document.createElement('div');
-                          fallback.className = 'fallback-icon w-12 h-12 rounded-full flex items-center justify-center text-sm font-medium border-2 border-[#e5e7eb]';
-                          fallback.style.backgroundColor = agentColors.background;
-                          fallback.style.color = agentColors.text;
-                          const icon = document.createElement('div');
-                          icon.innerHTML = `<svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>`;
-                          fallback.appendChild(icon);
-                          container.appendChild(fallback);
-                        }
-                      }}
-                    />
+                <div key={`contact-${index}`} className="flex items-center gap-3 px-4 py-3 hover:bg-[#f5f6fa] cursor-pointer border-b border-[#f0f2f5] 
+                opacity-100 pointer-events-none bg-white">
+                <div className="relative w-12 h-12">
+                  <img
+                    src={getContactImage(contact.name)}
+                    alt={contact.name}
+                    className="w-12 h-12 rounded-full object-cover"
+                    onError={(e) => {
+                      // Fallback to colored circle with initials if image fails
+                      e.currentTarget.style.display = 'none';
+                      const container = e.currentTarget.parentElement;
+                      if (container && !container.querySelector('.fallback-contact-icon')) {
+                        const fallback = document.createElement('div');
+                        fallback.className = 'fallback-contact-icon w-12 h-12 rounded-full flex items-center justify-center text-white text-sm font-medium';
+                        fallback.style.backgroundColor = contactColor;
+                        fallback.textContent = initials;
+                        container.appendChild(fallback);
+                      }
+                    }}
+                  />
                   </div>
-                  <div className="flex-1">
+                <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-[#111b21] text-sm font-medium">{agent.name}</h3>
-                      <span className="text-xs text-[#667781]">now</span>
+                    <h3 className="text-[#111b21] text-base font-normal truncate">{contact.name}</h3>
+                    <div className="flex items-center gap-1">
+                      <span className="text-xs text-[#8696a0] flex-shrink-0">{contact.time}</span>
+                      {contact.isMuted && (
+                        <svg className="w-4 h-4 text-[#8696a0]" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/>
+                        </svg>
+                      )}
                     </div>
-                    <p className="text-xs text-[#667781] truncate">{agent.status}</p>
+                                    </div>
+                  <p className="text-sm text-[#8696a0] truncate">{contact.lastMessage}</p>
                   </div>
-                  <div className="w-2 h-2 bg-[#25d366] rounded-full"></div>
                 </div>
               );
             })}
-          </div>
         </div>
       </div>
 
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col bg-[#f0f2f5]">
         {/* Chat Header */}
-        <div className="bg-[#f0f2f5] border-b border-[#e5e7eb] p-4">
+        <div className="bg-[#F4F4F4] border-b border-[#e5e7eb] p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full overflow-hidden">
-                <img
-                  src="/assets/investors/chatprofile.png"
-                  alt="Løvens Hule Group"
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback to the green circle with Users icon if image fails
-                    e.currentTarget.style.display = 'none';
-                    const container = e.currentTarget.parentElement;
-                    if (container && !container.querySelector('.fallback-group-icon')) {
-                      const fallback = document.createElement('div');
-                      fallback.className = 'fallback-group-icon w-10 h-10 bg-[#25d366] rounded-full flex items-center justify-center';
-                      fallback.innerHTML = '<svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M16 4c0-1.11.89-2 2-2s2 .89 2 2-.89 2-2 2-2-.89-2-2zM4 18v-4h3v4H4zM13 2v2c0 1.1-.9 2-2 2s-2-.9-2-2V2h4zM12 6c2.21 0 4 1.79 4 4 0 1.67-1 3.11-2.4 3.73v2.26h-3.2v-2.26C9 13.11 8 11.67 8 10c0-2.21 1.79-4 4-4z"/></svg>';
-                      container.appendChild(fallback);
-                    }
-                  }}
-                />
+              {/* Overlapping Investor Avatars */}
+              <div className="relative w-12 h-12">
+                <div className="relative w-12 h-12">
+                  {/* Back row - 3 images */}
+                  <img
+                    src={getInvestorAvatar('Jakob Risgaard')}
+                    alt="Jakob Risgaard"
+                    className="absolute top-0 left-0 w-7 h-7 rounded-full object-cover border-2 border-white z-10"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <img
+                    src={getInvestorAvatar('Jesper Buch')}
+                    alt="Jesper Buch"
+                    className="absolute top-0 right-0 w-7 h-7 rounded-full object-cover border-2 border-white z-10"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <img
+                    src={getInvestorAvatar('Jan Lehrmann')}
+                    alt="Jan Lehrmann"
+                    className="absolute bottom-0 left-1 w-7 h-7 rounded-full object-cover border-2 border-white z-10"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  
+                  {/* Front row - 2 images */}
+                  <img
+                    src={getInvestorAvatar('Christian Stadil')}
+                    alt="Christian Stadil"
+                    className="absolute bottom-0 right-1 w-7 h-7 rounded-full object-cover border-2 border-white z-20"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  
+                  {/* +1 indicator for remaining member */}
+                  <div className="absolute bottom-1 right-1 w-5 h-5 bg-[#111b21] rounded-full flex items-center justify-center text-white text-xs font-medium border border-white z-30">
+                    +2
+                  </div>
+                </div>
               </div>
+              
               <div>
                 <h1 className="text-[#111b21] font-medium">
-                  {analysisMode === 'autonomous' ? 'Løvens Hule Diskussion' : 'Løvens Hule Pitch Analyse'}
+                  {analysisMode === 'autonomous' ? 'Løverne' : 'Løvens Hule Pitch Analyse'}
                 </h1>
-                <p className="text-xs text-[#667781]">
-                  {analysisMode === 'autonomous' 
-                    ? 'Danske investorer diskuterer • ' + maxTurns + ' runder • 4-10s ventetid'
-                    : maxTurns + ' specialister online'
-                  }
+                <p className="text-xs text-[#8696a0]">
+                  Jakob Risgaard, Jesper Buch, Jan Lehrmann, Christian Stadil, Tahir Siddique
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-4 text-[#667781]">
-              <button className="hover:text-[#111b21]">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
-                </svg>
-              </button>
-              <button className="hover:text-[#111b21]">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                  <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                </svg>
-              </button>
-              <button className="hover:text-[#111b21]">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                </svg>
-              </button>
-            </div>
+            
+
           </div>
         </div>
       
@@ -482,8 +699,10 @@ export function SimplePitchChat({
         <div 
           className="flex-1 overflow-y-auto p-4 relative"
           style={{
-            backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 100 100'%3E%3Cg fill-opacity='0.05'%3E%3Cpath d='M50 15L85 50L50 85L15 50Z' fill='%23667781'/%3E%3C/g%3E%3C/svg%3E\")",
-            backgroundSize: '100px 100px'
+            backgroundImage: "url('/assets/convo_bg.png')",
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat'
           }}
         >
           <div className="space-y-3 max-w-4xl mx-auto">
@@ -620,18 +839,21 @@ export function SimplePitchChat({
         </div>
         
         {/* Input Area */}
-        <div className="bg-[#f0f2f5] p-4 border-t border-[#e5e7eb]">
-          <form onSubmit={handleSendMessage} className="flex items-end gap-3">
+        <div className="bg-white px-4 py-3">
+          <form onSubmit={handleSendMessage} className="flex items-center gap-3">
+            {/* Plus Icon */}
             <button 
               type="button"
-              className="flex-shrink-0 w-10 h-10 rounded-full bg-white hover:bg-gray-50 flex items-center justify-center text-[#667781] hover:text-[#111b21] transition-colors border border-[#e5e7eb]"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#111b21] transition-colors"
             >
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM7 9a1 1 0 100-2 1 1 0 000 2zm7-1a1 1 0 11-2 0 1 1 0 012 0zm-.464 5.535a1 1 0 10-1.415-1.414 3 3 0 01-4.242 0 1 1 0 00-1.415 1.414 5 5 0 007.072 0z" clipRule="evenodd" />
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
               </svg>
             </button>
 
-            <div className="flex-1 bg-white rounded-lg overflow-hidden border border-[#e5e7eb]">
+            {/* Input Field Container */}
+            <div className="flex-1 bg-[#f6f6f6] rounded-full px-4 py-2 flex items-center gap-2">
+              <div className="flex-1">
               <textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
@@ -641,37 +863,59 @@ export function SimplePitchChat({
                     handleSendMessage(e);
                   }
                 }}
-                placeholder="Type a message"
+                  placeholder="Message"
                 disabled={isLoading}
                 rows={1}
-                className="w-full px-4 py-3 bg-transparent text-[#111b21] placeholder-[#667781] resize-none outline-none min-h-[20px] max-h-[120px]"
+                  className="w-full bg-transparent text-[#111b21] placeholder-[#8e8e93] resize-none outline-none border-none text-base"
                 style={{ 
                   height: 'auto',
-                  minHeight: '44px'
+                    minHeight: '20px',
+                    maxHeight: '80px'
                 }}
                 onInput={(e) => {
                   const target = e.target as HTMLTextAreaElement;
                   target.style.height = 'auto';
-                  target.style.height = Math.min(target.scrollHeight, 120) + 'px';
+                    target.style.height = Math.min(target.scrollHeight, 80) + 'px';
                 }}
               />
+              </div>
             </div>
 
+            {/* Emoji Button */}
+            <button 
+              type="button"
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#111b21] transition-colors"
+            >
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+              </svg>
+            </button>
+
+            {/* Microphone or Send Button */}
+            {input.trim() ? (
             <button 
               type="submit" 
-              disabled={!input.trim() || isLoading}
-              className="flex-shrink-0 w-10 h-10 rounded-full bg-[#25d366] hover:bg-[#20bf5a] disabled:bg-[#e5e7eb] disabled:cursor-not-allowed flex items-center justify-center text-white transition-colors"
+                disabled={isLoading}
+                className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-[#007aff] hover:text-[#0051d0] disabled:text-[#8e8e93] transition-colors"
             >
               {isLoading ? (
-                <div className="w-5 h-5">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                </div>
+                  <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
               ) : (
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z" />
+                  <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
                 </svg>
               )}
             </button>
+            ) : (
+              <button 
+                type="button"
+                className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-[#8e8e93] hover:text-[#111b21] transition-colors"
+              >
+                <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                </svg>
+              </button>
+            )}
           </form>
         </div>
       </div>

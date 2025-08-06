@@ -462,7 +462,7 @@ KRITISK: Vær aktivt faciliterende - vent ikke bare! Guide diskussionen fremad.`
 // Autonomous multi-agent discussion runner
 export async function* runAutonomousMultiAgentAnalysis(
   pitchContent: string, 
-  maxTurns: number = 15
+  maxTurns: number = 3
 ): AsyncGenerator<{
   type: 'agent_start' | 'agent_message' | 'agent_complete' | 'agent_error' | 'discussion_complete' | 'handoff' | 'agent_typing_start' | 'agent_typing_stop';
   agent?: string;
