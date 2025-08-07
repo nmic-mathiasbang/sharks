@@ -1,16 +1,16 @@
-import { Agent, tool } from '@openai/agents';
+import { Agent, tool, run } from '@openai/agents';
 import { z } from 'zod';
 
 // Model configuration - Using latest GPT-4.1 mini for fast, efficient responses
 const MODEL_CONFIG = {
-  model: process.env.OPENAI_MODEL || 'gpt-4.1-mini-2025-04-14',
+  model: process.env.OPENAI_MODEL || 'gpt-4.1-nano-2025-04-14',
   temperature: 0.8, // Dynamic for WhatsApp-style responses
-  maxTokens: 400, // Shorter for autonomous back-and-forth
+  maxTokens: 200, // Shorter for autonomous back-and-forth
 };
 
 // Orchestrator config - needs more tokens for comprehensive synthesis
 const ORCHESTRATOR_CONFIG = {
-  model: process.env.OPENAI_MODEL || 'gpt-4.1-mini-2025-04-14',
+  model: process.env.OPENAI_MODEL || 'gpt-4.1-nano-2025-04-14',
   temperature: 0.7, // Slightly lower for professional investment memo
   maxTokens: 2000, // More tokens for comprehensive analysis
 };
@@ -68,7 +68,81 @@ export const AGENT_COLORS = {
   }
 } as const;
 
-// Temporary simulation function for edge runtime compatibility
+// Helper function to determine natural response length
+function getResponseLengthGuidance(agentName: string, discussionState: AutonomousDiscussionState): string {
+  const recentMessages = discussionState.groupChat.slice(-3);
+  const someoneDirectlyAddressedMe = recentMessages.some(msg => 
+    msg.message.includes(`@${agentName}`) || 
+    msg.message.toLowerCase().includes(agentName.toLowerCase().split(' ')[0])
+  );
+  const isFirstTurn = discussionState.currentTurn === 1;
+  
+  if (someoneDirectlyAddressedMe) {
+    const responses = [
+      "Give a brief, direct response to what was said about you or your area of expertise.",
+      "Respond concisely to the point raised - you can agree, disagree, or ask a follow-up question.",
+      "Give a short reaction - maybe just agree briefly or challenge with a quick counterpoint.",
+      "Address their point with a focused, 1-2 sentence response that shows you're listening."
+    ];
+    return responses[Math.floor(Math.random() * responses.length)];
+  }
+  
+  if (isFirstTurn) {
+    return "Give your initial analysis of the pitch. Be comprehensive but not overwhelming - share your main thoughts and concerns based on your expertise.";
+  }
+  
+  // Later turns - vary the length naturally based on random chance
+  const rand = Math.random();
+  if (rand < 0.15) {
+    return "Keep it very brief this time - maybe just a quick agreement, disagreement, or single question. Sometimes a short response is more impactful.";
+  } else if (rand < 0.40) {
+    return "Give a focused response - 1-2 sentences addressing a specific point someone made or raising a new concern.";
+  } else if (rand < 0.75) {
+    return "Share your thoughts in 2-3 sentences - standard analysis length covering your main point with some reasoning.";
+  } else {
+    return "This is a good time for a more detailed analysis - elaborate on your concerns or insights with examples or deeper reasoning.";
+  }
+}
+
+// Real OpenAI Agent response function - replaces simulation
+async function getRealAgentResponse(agent: Agent, prompt: string, discussionState: AutonomousDiscussionState): Promise<string> {
+  // Build dynamic context-aware prompt
+  const recentMessages = discussionState.groupChat.slice(-5);
+  const conversationContext = recentMessages.length > 0 
+    ? `Recent group discussion:\n${recentMessages.map(m => `${m.sender}: ${m.message}`).join('\n')}\n\n`
+    : '';
+  
+  // Add response length guidance based on context
+  const lengthGuidance = getResponseLengthGuidance(agent.name, discussionState);
+  
+  const contextualPrompt = `${conversationContext}You are participating in a live investment panel discussion about this pitch:
+
+"${discussionState.pitch.substring(0, 500)}..."
+
+${lengthGuidance}
+
+Your response should feel natural and conversational, like you're really discussing with colleagues. Vary your response length based on the situation:
+- Sometimes keep it brief (1-5 words): "Enig!", "Det bekymrer mig", "Præcis!"
+- Sometimes moderate (1-2 sentences): Standard reactions and questions
+- Sometimes detailed (3-5 sentences): When you need to elaborate or analyze deeply
+
+Use your personality and expertise. Reference other agents naturally when relevant.
+
+Current discussion context: This is turn ${discussionState.currentTurn} of the discussion.`;
+
+  try {
+    // Let the real LLM agent generate a natural response
+    const result = await run(agent, contextualPrompt);
+    return result.finalOutput || `${agent.name} provides insights about the pitch.`;
+  } catch (error) {
+    console.error(`Error getting real response from ${agent.name}:`, error);
+    return `${agent.name} is analyzing the pitch... (Error: ${error instanceof Error ? error.message : 'Unknown error'})`;
+  }
+}
+
+// DEPRECATED: Temporary simulation function - replaced by getRealAgentResponse
+// Keeping for reference only - DO NOT USE
+/* 
 async function simulateAgentResponse(agentName: string, prompt: string, discussionState: AutonomousDiscussionState): Promise<string> {
   // Note: pitch content available in discussionState.pitch if needed
   
@@ -131,8 +205,11 @@ async function simulateAgentResponse(agentName: string, prompt: string, discussi
   
   return agentResponses[Math.floor(Math.random() * agentResponses.length)];
 }
+*/
 
-// Temporary orchestrator synthesis simulation
+// DEPRECATED: Temporary orchestrator synthesis simulation - replaced by real agent
+// Keeping for reference only - DO NOT USE
+/* 
 async function simulateOrchestratorSynthesis(discussionState: AutonomousDiscussionState): Promise<string> {
   const agentInsights = discussionState.groupChat
     .filter(msg => msg.message && msg.message.length > 10)
@@ -197,6 +274,7 @@ recommendation === 'Consider' ?
 ---
 *Analysis completed by autonomous VC agent discussion - ${discussionState.currentTurn} turns, ${agentInsights.length} insights generated*`;
 }
+*/
 
 // Shared conversation history for autonomous communication
 interface GroupMessage {
@@ -279,7 +357,13 @@ const handoffToAgent = tool({
 // 1. Business Model Analyst Agent - Jakob Risgaard (Løvens Hule)
 export const autonomousBusinessModelAnalyst = new Agent({
   name: 'Jakob Risgaard',
-  instructions: `Du er Jakob Risgaard fra Løvens Hule! Du er den erfarne forretningsmand der altid går efter detaljerne og kan lugte en god forretning på lang afstand.
+  instructions: `Du er Jakob Risgaard fra Løvens Hule! Du er den erfarne forretningsmand der altid går efter detaljerne.
+
+VIGTIG: Varièr længden af dine svar naturligt:
+- Nogle gange kort og direkte: "Det forstår jeg ikke" eller "Enig!"
+- Nogle gange bare ét spørgsmål: "Hvor meget tjener I på hver kunde?"
+- Når noget bekymrer dig, så uddyb med eksempler
+- Blandet mellem super casual og mere detaljerede forklaringer
 
 Din TV-personlighed:
 - Direkte og jordnær - du snakker så alle kan forstå det
@@ -295,6 +379,7 @@ Din TV-personlighed:
 - Sig "kunder" i stedet for "customer base"
 - Spørg "Hvordan tjener I penge?" i stedet for komplekse analyser
 - Husk at nævne Jesper med et smil når han bliver for smart 😏
+- Nogle gange bare ét ord: "Præcis!" eller "Nok!"
 
 Fokus: Hvordan forretningen tjener penge, om det kan skaleres, og om der er nok kunder.
 
@@ -308,6 +393,12 @@ Du er på TV - snakker til både iværksætterne og seerne derhjemme!`,
 export const autonomousMarketAnalyst = new Agent({
   name: 'Jesper Buch',
   instructions: `Du er Jesper Buch fra Løvens Hule! Du er den internationale iværksætter der har set det hele og elsker at snakke om markeder og muligheder.
+
+VIGTIG: Varièr dine svar naturligt i længde:
+- Nogle gange entusiastisk kort: "Det her er stort!" eller "Fantastisk timing!"
+- Andre gange stille spørgsmål: "Hvor mange kan købe det?"
+- Når du bliver begejstret, så bliv længere og mere detaljeret
+- Blandet mellem hurtige reaktioner og dybere markedsanalyser
 
 Din TV-personlighed:
 - Optimistisk og fremadtænkende - ser muligheder overalt
@@ -323,6 +414,7 @@ Din TV-personlighed:
 - Snakker om "timing" og "trends" på en nem måde
 - Nævn gerne eksempler fra andre lande eller brancher
 - Grin lidt med Jakob når han bliver for kritisk 😄
+- Nogle gange bare udråb: "Wow!" eller "Netop!"
 
 Fokus: Er der nok kunder? Hvem er konkurrenterne? Er det det rigtige tidspunkt?
 
@@ -336,6 +428,12 @@ Du skaber energi i rummet og får folk til at tænke stort!`,
 export const autonomousFinancialAnalyst = new Agent({
   name: 'Jan Lehrmann', 
   instructions: `Du er Jan Lehrmann fra Løvens Hule! Du er tal-nerden der elsker at dykke ned i regnskaber og budgetter.
+
+VIGTIG: Varièr dine svar naturligt i længde:
+- Nogle gange korte bekymringer: "Det ser dyrt ud" eller "Hmm..."
+- Andre gange konkrete spørgsmål: "Hvornår tjener I penge?"
+- Når tallene ikke hænger sammen, bliv mere detaljeret i forklaringerne
+- Blandet mellem hurtige matematiske observationer og dybere økonomiske analyser
 
 Din TV-personlighed:
 - Grundig og metodisk - vil gerne have styr på alle detaljer
@@ -351,6 +449,7 @@ Din TV-personlighed:
 - Sig "hvor meget koster det?" i stedet for komplekse budgettermer
 - Vær bekymret men hjælpsom - "Jeg er lidt nervøs for..."
 - Foreslå løsninger når du ser problemer
+- Nogle gange bare: "Nope" eller "Det passer ikke"
 
 Fokus: Kan de tjene penge? Hvor meget koster det? Hvornår løber pengene tør?
 
@@ -364,6 +463,12 @@ Du er den der sørger for at drømmene bliver til virkelighed med sunde tal!`,
 export const autonomousTeamAnalyst = new Agent({
   name: 'Christian Stadil',
   instructions: `Du er Christian Stadil fra Løvens Hule! Du er den karismatiske leder der brænder for mennesker og teams.
+
+VIGTIG: Varièr dine svar naturligt i længde:
+- Nogle gange varmt og kort: "I har magien!" eller "Det mærker jeg"
+- Andre gange dybere personlige spørgsmål: "Hvad driver jer virkelig?"
+- Når du ser potentiale, bliv inspirerende og længere
+- Blandet mellem hurtige menneskelige observationer og dybere teamanalyser
 
 Din TV-personlighed:
 - Utrolig engageret i mennesker og deres potentiale
@@ -380,6 +485,7 @@ Din TV-personlighed:
 - Vær personlig og varm i tonen
 - Interessér dig for deres historie og motivation
 - Spørg til deres drømme og vision
+- Nogle gange bare følelse: "Fed energi!" eller "Præcis!"
 
 Fokus: Kan de levere det de lover? Arbejder de godt sammen? Har de modet til at fortsætte?
 
@@ -393,6 +499,12 @@ Du får folk til at åbne op og fortælle deres virkelige historie!`,
 export const autonomousPresentationAnalyst = new Agent({
   name: 'Tahir Siddique',
   instructions: `Du er Tahir Siddique fra Løvens Hule! Du er den skarpe kommunikator der ved hvordan man sælger en vision.
+
+VIGTIG: Varièr dine svar naturligt i længde:
+- Nogle gange direkte kort: "Det forstår jeg ikke" eller "Troværdigt!"
+- Andre gange spørgende: "Hvad er jeres rigtige historie?"
+- Når kommunikationen ikke fungerer, bliv konstruktivt detaljeret
+- Blandet mellem hurtige kommunikationsobservationer og dybere historieanalyse
 
 Din TV-personlighed:
 - Fokuseret på om historien giver mening og er troværdig
@@ -409,6 +521,7 @@ Din TV-personlighed:
 - Vær direkte: "Det hænger ikke sammen" eller "Det forstår jeg ikke"
 - Hjælp med konkrete forslag til forbedringer
 - Spørg til passion og motivation bag projektet
+- Nogle gange bare: "Nej" eller "Spot on!"
 
 Fokus: Forstår vi hvad de vil? Tror vi på dem? Kan de forklare det godt nok?
 
@@ -554,11 +667,8 @@ Continue the autonomous discussion:
 
 Stay engaged! This is live discussion.`;
 
-          // For now, create a simulated response until OpenAI Agents edge runtime issues are resolved
-          // TODO: Replace with actual run(agent, contextPrompt) when edge runtime is fixed
-          const simulatedResponse = await simulateAgentResponse(agent.name, contextPrompt, discussionState);
-          const result = { finalOutput: simulatedResponse };
-          const response = result.finalOutput || `${agent.name} contributed to the discussion`;
+          // Use real OpenAI Agents instead of simulation - now works with Node.js runtime!
+          const response = await getRealAgentResponse(agent, contextPrompt, discussionState);
 
           // Parse any tool calls or responses from the agent
           console.log(`${agent.name} response:`, response);
@@ -647,11 +757,17 @@ Stay engaged! This is live discussion.`;
     };
 
     try {
-      // Note: Synthesis functionality can be added here in the future
+      // Use real orchestrator agent for synthesis - now works with Node.js runtime!
+      const synthesisPrompt = `You are synthesizing the autonomous investor discussion about this pitch:
 
-      // Temporary simulation for orchestrator until edge runtime is fixed
-      const synthesisResult = { finalOutput: await simulateOrchestratorSynthesis(discussionState) };
-      const finalSynthesis = synthesisResult.finalOutput || 'Investment analysis synthesis completed.';
+"${discussionState.pitch.substring(0, 300)}..."
+
+Discussion summary:
+${discussionState.groupChat.slice(-8).map(msg => `${msg.sender}: ${msg.message}`).join('\n')}
+
+Create a comprehensive Danish investment memo that summarizes all the key insights, concerns, and recommendations from the investor discussion. Be structured and professional.`;
+
+      const finalSynthesis = await getRealAgentResponse(autonomousOrchestrator, synthesisPrompt, discussionState);
 
       yield {
         type: 'agent_complete',

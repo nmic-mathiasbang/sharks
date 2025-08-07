@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { runAutonomousMultiAgentAnalysis } from '@/lib/agents/autonomous-multi-agent-analyzer';
 
-export const runtime = 'edge'; // Enable edge runtime for streaming
+export const runtime = 'nodejs'; // Enable Node.js runtime for OpenAI Agents
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
-          console.log('🚀 Starting autonomous agent discussion stream...');
+          console.log('🚀 Starting REAL autonomous agent discussion stream...');
           
-          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 3)) {
-            console.log('Streaming event:', event.type, event.agent);
+          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 1)) {
+            console.log('Streaming real AI event:', event.type, event.agent);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             
             // Add small delay between events for better UX
@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
           controller.close();
           
         } catch (error) {
-          console.error('Autonomous discussion stream error:', error);
+          console.error('Real autonomous discussion stream error:', error);
           controller.enqueue(encoder.encode(`data: {"type": "error", "error": "${error instanceof Error ? error.message : 'Unknown stream error'}"}\n\n`));
           controller.close();
         }
