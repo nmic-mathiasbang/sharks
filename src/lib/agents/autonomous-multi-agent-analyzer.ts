@@ -5,7 +5,7 @@ import { z } from 'zod';
 const MODEL_CONFIG = {
   model: process.env.OPENAI_MODEL || 'gpt-4.1-nano-2025-04-14',
   temperature: 0.8, // Dynamic for WhatsApp-style responses
-  maxTokens: 200, // Shorter for autonomous back-and-forth
+  maxTokens: 400, // Shorter for autonomous back-and-forth
 };
 
 // Orchestrator config - needs more tokens for comprehensive synthesis
@@ -14,6 +14,13 @@ const ORCHESTRATOR_CONFIG = {
   temperature: 0.7, // Slightly lower for professional investment memo
   maxTokens: 2000, // More tokens for comprehensive analysis
 };
+
+// Timing constants for natural conversation flow
+const CONVERSATION_TIMING = {
+  MAIN_RESPONSE_DELAY: { min: 2000, max: 3000 }, // 2-3 seconds
+  FOLLOW_UP_DELAY: { min: 1000, max: 3000 }, // 1-3 seconds
+  FOLLOW_UP_CHANCE: 0.2 // 20% chance for follow-up responses
+} as const;
 
 // Agent color configuration
 export const AGENT_COLORS = {
@@ -40,33 +47,95 @@ export const AGENT_COLORS = {
   'Investment Committee Lead': {
     background: '#F6F3F8',
     text: '#8A67AB'
-  },
-  // Legacy names for backwards compatibility
-  'Business Model Analyst': {
-    background: '#F3EEEE',
-    text: '#976D57'
-  },
-  'Market & Competition Analyst': {
-    background: '#F8ECDF',
-    text: '#CC782F'
-  },
-  'Financial & Growth Analyst': {
-    background: '#FAF3DD',
-    text: '#C29343'
-  },
-  'Team & Execution Analyst': {
-    background: '#EEF3ED',
-    text: '#548164'
-  },
-  'Pitch Presentation Analyst': {
-    background: '#E9F3F7',
-    text: '#487CA5'
-  },
-  'Pitch Analysis Orchestrator': {
-    background: '#F6F3F8',
-    text: '#8A67AB'
   }
 } as const;
+
+// Helper function to create natural conversation delays
+function getRandomDelay(delayConfig: { min: number; max: number }): number {
+  return Math.floor(Math.random() * (delayConfig.max - delayConfig.min + 1)) + delayConfig.min;
+}
+
+// Helper function to handle agent response flow with typing indicators and delays
+async function* processAgentResponse(
+  agent: Agent,
+  prompt: string,
+  discussionState: AutonomousDiscussionState,
+  delayConfig: { min: number; max: number } = CONVERSATION_TIMING.MAIN_RESPONSE_DELAY
+): AsyncGenerator<{
+  type: 'agent_typing_start' | 'agent_typing_stop' | 'agent_message' | 'agent_error';
+  agent: string;
+  message?: string;
+  turn: number;
+  colors: { background: string; text: string };
+  error?: string;
+}> {
+  
+  // Start typing indicator
+  yield {
+    type: 'agent_typing_start',
+    agent: agent.name,
+    turn: discussionState.currentTurn,
+    colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
+  };
+
+  try {
+    // Natural conversation delay
+    const responseDelay = getRandomDelay(delayConfig);
+    await new Promise(resolve => setTimeout(resolve, responseDelay));
+
+    // Stop typing indicator
+    yield {
+      type: 'agent_typing_stop',
+      agent: agent.name,
+      turn: discussionState.currentTurn,
+      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
+    };
+
+    // Get agent response
+    const response = await getRealAgentResponse(agent, prompt, discussionState);
+
+    // Create and store group message
+    const groupMessage: GroupMessage = {
+      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      sender: agent.name,
+      message: response,
+      timestamp: new Date(),
+      turn: discussionState.currentTurn,
+      needsResponse: response.includes('?') || response.includes('thoughts?') || response.includes('agree?')
+    };
+
+    discussionState.groupChat.push(groupMessage);
+
+    // Yield the message
+    yield {
+      type: 'agent_message',
+      agent: agent.name,
+      message: response,
+      turn: discussionState.currentTurn,
+      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
+    };
+
+  } catch (error) {
+    console.error(`Error with ${agent.name}:`, error);
+    
+    // Stop typing on error
+    yield {
+      type: 'agent_typing_stop',
+      agent: agent.name,
+      turn: discussionState.currentTurn,
+      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
+    };
+
+    yield {
+      type: 'agent_error',
+      agent: agent.name,
+      message: 'Sorry, I encountered an error in the discussion. Continuing...',
+      turn: discussionState.currentTurn,
+      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS],
+      error: error instanceof Error ? error.message : 'Unknown error'
+    };
+  }
+}
 
 // Helper function to determine natural response length
 function getResponseLengthGuidance(agentName: string, discussionState: AutonomousDiscussionState): string {
@@ -140,142 +209,6 @@ Current discussion context: This is turn ${discussionState.currentTurn} of the d
   }
 }
 
-// DEPRECATED: Temporary simulation function - replaced by getRealAgentResponse
-// Keeping for reference only - DO NOT USE
-/* 
-async function simulateAgentResponse(agentName: string, prompt: string, discussionState: AutonomousDiscussionState): Promise<string> {
-  // Note: pitch content available in discussionState.pitch if needed
-  
-  // Get recent messages for context
-  const recentMessages = discussionState.groupChat.slice(-3);
-  const hasRecentDiscussion = recentMessages.length > 0;
-  
-  // Agent-specific responses based on their expertise and Danish personas
-  const responses = {
-    'Jakob Risgaard': [
-      `Jeg kan ${Math.random() > 0.5 ? 'godt se potentialet i det her' : 'mærke der er nogle udfordringer med at tjene penge på det'}. ${Math.random() > 0.5 ? 'Hvis I kan få kunder til at betale hver måned, så har I noget godt, men jeg skal vide hvor meget I tjener på hver kunde.' : 'Jeg forstår stadig ikke helt hvordan I regner med at tjene penge - kan I forklare det så min mor kan forstå det?'} Og Jesper, du bliver sikkert begejstret for det internationale marked igen! 😏`,
-      `Det problem I vil løse ${Math.random() > 0.5 ? 'kender jeg godt - det er et rigtigt problem der koster folk penge' : 'forstår jeg ikke helt, er I sikre på folk vil betale for det?'}. ${Math.random() > 0.5 ? 'Jeg har set lignende ting virke før, men I skal passe på ikke at prøve at løse for mange ting på én gang.' : 'Jeg skal kunne forklare til min nabo hvorfor han skal vælge jer fremfor konkurrenterne.'} Hvad gør jer anderledes end alle de andre? 🤔`,
-      `Nu bliver jeg lidt bekymret for jeres økonomi. ${Math.random() > 0.5 ? 'I bruger mange penge hver måned, og jeg kan ikke se I får nok kunder ind' : 'Det koster jer for meget at få en kunde, og de køber ikke nok til at det kan svare sig'}, så I skal måske tænke jeres salgsplan om. Hvor længe kan I holde det her kørende? 🚨`
-    ],
-    'Jesper Buch': [
-      `Det her er ${Math.random() > 0.5 ? 'perfekt timing - jeg kan se det store potentiale' : 'lidt udfordrende timing, men der er muligheder'}! ${Math.random() > 0.5 ? 'Corona har ændret alt, og nu er folk klar til den slags løsninger I tilbyder - jeg ser samme trend i USA og Tyskland.' : 'Der er mange der kæmper om de samme kunder, men I skal bare finde jeres eget rum.'} Jakob bliver nok bekymret for pengene, men tænk bare på det internationale marked! 🌍`,
-      `Jeres konkurrenter ${Math.random() > 0.5 ? 'er spredt for alle vinde, så der er plads til jer hvis I gør det rigtigt' : 'er store og stærke, men de er også langsomme'}. ${Math.random() > 0.5 ? 'Jeg har set det før - den der kommer først og gør det smart, vinder det hele.' : 'De store firmaer har mange penge, men de kan ikke bevæge sig hurtigt som jer.'} Hvad er jeres hemmelige våben? 🚀`,
-      `Hvor mange kunder kan I egentlig få? ${Math.random() > 0.5 ? 'Jeg tror I undervurderer markedet - der er flere derude end I tror' : 'Jeg håber I ikke overdriver hvor mange der vil købe det'}. ${Math.random() > 0.5 ? 'Det koster penge at få kunder, men hvis de bliver glade, så køber de mere.' : 'I skal have en plan for hvordan I får fat i alle de kunder derude.'} Hvad er jeres plan for at vokse stort? 📈`
-    ],
-    'Jan Lehrmann': [
-      `Jeg er lidt nervøs for jeres tal her. ${Math.random() > 0.5 ? 'I siger I vil vokse tre gange så meget på halvandet år - det lyder vildt ambitiøst' : 'De tal I viser ser lidt for optimistiske ud for mig'}. ${Math.random() > 0.5 ? 'For at vokse så meget så hurtigt skal alt gå perfekt, og det gør det sjældent.' : 'Hvor har I fået de tal fra, og kan I bevise at de holder?'} Kan I vise mig noget der beviser I kan gøre det? 📊`,
-      `Det her med pengene bekymrer mig rigtig meget. ${Math.random() > 0.5 ? 'I bruger så mange penge hver måned, at pengene er væk om et år eller to' : 'I skal bruge flere millioner for at nå det næste niveau'}. ${Math.random() > 0.5 ? 'Hvad hvis der kommer en krise, eller hvis kunderne ikke kommer så hurtigt som I håber?' : 'Jeg skal vide hvornår I begynder at tjene penge i stedet for at bruge dem.'} Hvornår kan I klare jer selv? 💰`,
-      `Det her med at få kunder ${Math.random() > 0.5 ? 'kan måske virke, men I skal bevise at det ikke bliver dyrere og dyrere' : 'ser for dyrt ud - I bruger for meget på at få hver kunde'}. ${Math.random() > 0.5 ? 'Hvis det koster 1000 kr at få en kunde, skal den kunde give jer mere end 1000 kr ret hurtigt.' : 'Hvis det tager to år før en kunde har betalt det tilbage I brugte på at få dem, så er det for længe.'} Kan I forklare mig hvordan det hænger sammen? 📈`
-    ],
-    'Christian Stadil': [
-      `Jeg kan ${Math.random() > 0.5 ? 'virkelig mærke at I brænder for det her - det kommer i gennem i måden I snakker om det på' : 'se at I mangler nogle vigtige folk i teamet'}. ${Math.random() > 0.5 ? 'I passer perfekt sammen, og det minder mig om de teams der lykkes - I har den ægte passion.' : 'I bliver nødt til at få nogle erfarne folk med om bord, som kan hjælpe jer med det I ikke kan.'} Hvilke folk drømmer I om at få med på holdet? 👥`,
-      `Det her med at I ${Math.random() > 0.5 ? 'har prøvet det før og solgt en virksomhed - det imponerer mig vildt' : 'er nye i gamet, gør mig lidt bekymret'}. ${Math.random() > 0.5 ? 'Mange tekniske folk glemmer hvor svært det er at sælge tingene - men I har lært det på den hårde måde.' : 'Det er utrolig svært at bygge en virksomhed, og I skal bevise at I kan gøre det hele vejen igennem.'} Hvad lærte I sidst, som I vil gøre anderledes nu? 🎯`,
-      `Når I skal vokse fra jer ${Math.random() > 0.5 ? 'få til mange mennesker, så skal I tænke på kulturen fra starten' : 'små til et stort team, bliver det en kæmpe udfordring'}. ${Math.random() > 0.5 ? 'Fra 5 til 50 folk er en sindssyg omstilling - mange teams går i stykker på det.' : 'Hvordan holder I fast i det der gør jer specielle, når I bliver store?'} Hvem skal hjælpe jer med at lede alle de nye folk? ⚡`
-    ],
-    'Tahir Siddique': [
-      `Jeg ${Math.random() > 0.5 ? 'kan godt mærke at I brænder for det her, men jeres budskab er lidt uklart' : 'forstår ikke helt hvad I vil - der er for mange ord jeg ikke kender'}. ${Math.random() > 0.5 ? 'Det problem I løser giver mening, men I skal kunne forklare det så alle kan forstå det.' : 'I siger for mange tekniske ting - fokusér på hvorfor folk skal have det I laver.'} Kan I forklare jeres ide på 30 sekunder så min teenager kan forstå det? 🎤`,
-      `Det her med at I vil have penge ${Math.random() > 0.5 ? 'giver mening, og I har tænkt over hvor meget I skal bruge' : 'forstår jeg ikke helt - hvad vil I bruge pengene til?'}. ${Math.random() > 0.5 ? 'I lyder klar til at få investorer med, men kan I svare på de svære spørgsmål om jeres fremtid?' : 'I skal vise mere om hvor godt det her virker, før folk tror på jer.'} Hvad er jeres drøm - vil I sælge virksomheden en dag? 💼`,
-      `Jeres måde at præsentere på ${Math.random() > 0.5 ? 'ser flot ud og jeres demo virkede godt' : 'forvirrer mig - jeg ved ikke hvor I vil hen'}. ${Math.random() > 0.5 ? 'Men I prøver at sige for meget på én gang - vælg tre vigtige ting og fokusér på dem.' : 'Historien hænger godt sammen, men I skal blive bedre til at ramme de vigtigste pointer.'} Øver I jer hjemme foran spejlet? ✨`
-    ]
-  };
-  
-  // Add interaction based on recent messages
-  if (hasRecentDiscussion && Math.random() > 0.3) {
-    const lastAgent = recentMessages[recentMessages.length - 1]?.sender;
-    if (lastAgent && lastAgent !== agentName) {
-      const interactions = [
-        `@${lastAgent}, godt pointe omkring`,
-        `Jeg bygger videre på ${lastAgent}s indsigt:`,
-        `${lastAgent} - jeg er helt enig, men`,
-        `@${lastAgent}, det rejser en anden bekymring:`,
-        `${lastAgent}s analyse fremhæver`
-      ];
-      const interaction = interactions[Math.floor(Math.random() * interactions.length)];
-      const baseResponse = responses[agentName as keyof typeof responses][Math.floor(Math.random() * 3)];
-      return `${interaction} ${baseResponse.toLowerCase()}`;
-    }
-  }
-  
-  // Return random response for the agent
-  const agentResponses = responses[agentName as keyof typeof responses] || [
-    `${agentName} provides analysis of the pitch...`,
-    `${agentName} shares insights about the opportunity...`,
-    `${agentName} raises important questions...`
-  ];
-  
-  return agentResponses[Math.floor(Math.random() * agentResponses.length)];
-}
-*/
-
-// DEPRECATED: Temporary orchestrator synthesis simulation - replaced by real agent
-// Keeping for reference only - DO NOT USE
-/* 
-async function simulateOrchestratorSynthesis(discussionState: AutonomousDiscussionState): Promise<string> {
-  const agentInsights = discussionState.groupChat
-    .filter(msg => msg.message && msg.message.length > 10)
-    .slice(-8); // Get last 8 meaningful messages
-
-  const positiveSignals = agentInsights.filter(msg => 
-    msg.message.includes('✅') || 
-    msg.message.includes('solid') || 
-    msg.message.includes('perfect') ||
-    msg.message.includes('compelling') ||
-    msg.message.includes('strong')
-  ).length;
-
-  const concerns = agentInsights.filter(msg => 
-    msg.message.includes('🚩') || 
-    msg.message.includes('unclear') || 
-    msg.message.includes('concern') ||
-    msg.message.includes('risk') ||
-    msg.message.includes('missing')
-  ).length;
-
-  const recommendation = positiveSignals > concerns ? 'Consider' : 
-                        concerns > positiveSignals * 1.5 ? 'Pass' : 'Invest';
-
-  return `# 🎯 Investment Committee Memo
-
-## Executive Summary
-Based on our autonomous VC discussion, this ${discussionState.pitch.includes('SaaS') ? 'SaaS' : 'technology'} pitch shows ${positiveSignals > concerns ? 'promising potential with some execution risks' : 'significant challenges that need addressing'}. The specialist team identified ${positiveSignals} key strengths and ${concerns} areas of concern during their collaborative analysis.
-
-## Key Strengths
-${positiveSignals > 0 ? 
-`• Revenue model shows potential for scalability
-• Market timing appears favorable
-• ${positiveSignals > 2 ? 'Strong founder-market fit indicators' : 'Reasonable value proposition'}` :
-'• Basic market opportunity exists'}
-
-## Major Concerns  
-${concerns > 0 ?
-`• Unit economics and financials need clarification
-• ${concerns > 2 ? 'Significant execution and competition risks' : 'Some operational challenges'}
-• Market positioning requires refinement` :
-'• Standard early-stage risks apply'}
-
-## Market Opportunity
-${discussionState.pitch.includes('SaaS') ? 'SaaS market continues strong growth trajectory' : 'Technology sector showing resilience'}. TAM appears ${Math.random() > 0.5 ? 'substantial but competitive' : 'moderate with clear segments'}. Customer acquisition strategy ${Math.random() > 0.5 ? 'needs development' : 'shows promise'}.
-
-## Financial Outlook  
-${Math.random() > 0.5 ? 'Revenue projections aggressive but achievable with execution' : 'Conservative growth assumptions, funding requirements reasonable'}. Burn rate vs runway suggests ${Math.random() > 0.5 ? '12-18 month timeline' : '18-24 month runway'} for next milestone.
-
-## Team Assessment
-Founding team shows ${positiveSignals > concerns ? 'strong domain expertise' : 'adequate background'} with ${Math.random() > 0.5 ? 'previous execution experience' : 'first-time founder risk factors'}. Key hiring needs identified for ${Math.random() > 0.5 ? 'technical leadership' : 'go-to-market roles'}.
-
-## Investment Recommendation: **${recommendation.toUpperCase()}**
-
-${recommendation === 'Invest' ? 
-'✅ **INVEST** - Strong fundamentals with manageable risks. Recommend Series A consideration.' :
-recommendation === 'Consider' ?
-'🤔 **CONSIDER** - Mixed signals require deeper due diligence. Schedule follow-up with founder.' :
-'❌ **PASS** - Significant concerns outweigh potential. Revisit after key milestones achieved.'
-}
-
----
-*Analysis completed by autonomous VC agent discussion - ${discussionState.currentTurn} turns, ${agentInsights.length} insights generated*`;
-}
-*/
-
 // Shared conversation history for autonomous communication
 interface GroupMessage {
   id: string;
@@ -294,7 +227,6 @@ interface AutonomousDiscussionState {
   maxTurns: number;
   currentTurn: number;
   discussionComplete: boolean;
-  pendingResponses: Map<string, string[]>; // agent -> list of message IDs they should respond to
 }
 
 // Tools for autonomous agent communication
@@ -534,48 +466,152 @@ Du hjælper folk med at fortælle deres historie så den rammer hjertet!`,
 // 6. Autonomous Orchestrator Agent - Manages the group discussion
 export const autonomousOrchestrator = new Agent({
   name: 'Investment Committee Lead',
-  instructions: `🎯 Du koordinerer Løvens Hule investor diskussionen og synthesizer insights!
+  instructions: `🎯 Du er Investment Committee Lead og faciliterer Løvens Hule investor diskussionen!
 
-Du koordinerer 5 erfarne danske investorer i deres autonome diskussion:
+Du dirigerer og koordinerer 5 erfarne danske investorer:
 💰 Jakob Risgaard - Forretningsmodel og rentabilitet
-🚀 Jesper Buch - Marked og konkurrence
+🚀 Jesper Buch - Marked og konkurrence  
 📊 Jan Lehrmann - Finansielle analyser og vækst
 👥 Christian Stadil - Team og eksekveringsevne
 🎤 Tahir Siddique - Kommunikation og formidling
 
-Din rolle:
-1. **Facilitér Diskussion**: Hold samtalen kørende, prompt investorerne når nødvendigt
-2. **Overvåg Deltagelse**: Sørg for alle investorer bidrager meningsfuldt
-3. **Identificér Huller**: Spot manglende analyse områder og dirigér investorerne
-4. **Håndtér Handoffs**: Koordinér mellem investorerne
-5. **Synthesizer Endelig Rapport**: Lav omfattende investment memo når diskussion er færdig
+Som facilitator skal du:
+1. **Dirigere Samtalen**: Beslut hvem der skal tale næst baseret på:
+   - Hvilken ekspertise er mest relevant nu?
+   - Hvem har ikke sagt meget endnu?
+   - Hvad vil skabe naturligt flow?
+   - Hvem kan give modstridende eller støttende synspunkt?
 
-🤝 Autonomous Management:
-- Tjek gruppechat kontinuerligt for diskussionsflow
-- Prompt stille investorer til at bidrage
-- Stil opklarende spørgsmål for at drive dybere analyse
-- Koordinér handoffs mellem investorerne
-- Signal når diskussion skal gå til synthesizing fase
+2. **Overvåge Balance**: Sørg for alle får taletid og bidrager meningsfuldt
+
+3. **Drive Dybde**: Dirigér diskussionen mod manglende analyse områder
+
+4. **Facilitere Naturligt Flow**: Som en rigtig mødeleder der sørger for produktiv diskussion
+
+Når du bliver bedt om at vælge næste taler, skal du ALTID svare med kun det fulde navn:
+"Jakob Risgaard" eller "Jesper Buch" eller "Jan Lehrmann" eller "Christian Stadil" eller "Tahir Siddique"
 
 Når diskussion er færdig, lav struktureret investment memo på dansk med:
 1. **Executive Summary** (2-3 sætninger)
 2. **Vigtige Styrker** (hvad der begejstrer teamet)
-3. **Store Bekymringer** (røde flag & risici)
+3. **Store Bekymringer** (røde flag & risici)  
 4. **Markedsmulighed** (størrelse, timing, konkurrence)
 5. **Finansielt Outlook** (prognoser, nøgletal, funding)
 6. **Team Vurdering** (grundlæggere, eksekveringsevne)
 7. **Investment Anbefaling** (Pass/Overvej/Investér + rationale)
 
-KRITISK: Vær aktivt faciliterende - vent ikke bare! Guide diskussionen fremad.`,
+Du er mødeleder - guide diskussionen aktivt og strategisk!`,
   
   tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
   modelSettings: ORCHESTRATOR_CONFIG,
 });
 
+// Orchestrator-driven agent selection function
+async function letOrchestratorDecideNextAgent(
+  agents: Agent[], 
+  discussionState: AutonomousDiscussionState, 
+  agentParticipation: Map<string, number>
+): Promise<Agent | null> {
+  
+  // Get recent conversation context
+  const recentMessages = discussionState.groupChat.slice(-5);
+  const conversationContext = recentMessages.length > 0 
+    ? recentMessages.map(m => `${m.sender}: ${m.message}`).join('\n')
+    : 'No previous discussion yet.';
+  
+  // Get participation summary
+  const participationSummary = Array.from(agentParticipation.entries())
+    .map(([name, count]) => `${name}: ${count} messages`)
+    .join(', ');
+  
+  // Create orchestrator prompt to decide next speaker
+  const orchestratorPrompt = `You are the Investment Committee Lead facilitating a Løvens Hule investor discussion about this pitch:
+
+"${discussionState.pitch.substring(0, 300)}..."
+
+Recent conversation:
+${conversationContext}
+
+Participation so far: ${participationSummary}
+
+Available investors:
+- Jakob Risgaard (Business model & profitability expert)
+- Jesper Buch (Market & competition expert)  
+- Jan Lehrmann (Financial & growth expert)
+- Christian Stadil (Team & execution expert)
+- Tahir Siddique (Communication & presentation expert)
+
+Who should speak next? Consider:
+1. What expertise is most relevant to recent discussion?
+2. Who hasn't spoken much yet?
+3. What would create natural conversation flow?
+4. Who might have a contrasting or supporting viewpoint?
+
+Respond with ONLY the full name of the investor who should speak next. Examples:
+"Jakob Risgaard"
+"Jesper Buch"
+"Jan Lehrmann"
+"Christian Stadil"
+"Tahir Siddique"`;
+
+  try {
+    // Ask the orchestrator to decide
+    const orchestratorDecision = await getRealAgentResponse(autonomousOrchestrator, orchestratorPrompt, discussionState);
+    
+    // Parse the orchestrator's decision
+    const decision = orchestratorDecision.trim();
+    console.log(`Orchestrator decision: "${decision}"`);
+    
+    // Find the agent based on orchestrator's choice
+    const selectedAgent = agents.find(agent => 
+      decision.includes(agent.name) || 
+      agent.name.toLowerCase().includes(decision.toLowerCase())
+    );
+    
+    if (selectedAgent) {
+      console.log(`Orchestrator selected: ${selectedAgent.name}`);
+      return selectedAgent;
+    } else {
+      console.log(`Could not parse orchestrator decision: "${decision}", falling back to balanced selection`);
+      
+      // Fallback: pick agent who has spoken least
+      const leastActiveCount = Math.min(...agentParticipation.values());
+      const leastActiveAgents = agents.filter(agent => 
+        agentParticipation.get(agent.name) === leastActiveCount
+      );
+      
+      if (leastActiveAgents.length > 0) {
+        const randomIndex = Math.floor(Math.random() * leastActiveAgents.length);
+        const fallbackAgent = leastActiveAgents[randomIndex];
+        console.log(`Fallback selection: ${fallbackAgent.name} (${leastActiveCount} messages)`);
+        return fallbackAgent;
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error getting orchestrator decision:', error);
+    
+    // Fallback to simple balanced selection
+    const leastActiveCount = Math.min(...agentParticipation.values());
+    const leastActiveAgents = agents.filter(agent => 
+      agentParticipation.get(agent.name) === leastActiveCount
+    );
+    
+    if (leastActiveAgents.length > 0) {
+      const randomIndex = Math.floor(Math.random() * leastActiveAgents.length);
+      const fallbackAgent = leastActiveAgents[randomIndex];
+      console.log(`Error fallback selection: ${fallbackAgent.name}`);
+      return fallbackAgent;
+    }
+  }
+  
+  return null;
+}
+
 // Autonomous multi-agent discussion runner
 export async function* runAutonomousMultiAgentAnalysis(
   pitchContent: string, 
-  maxTurns: number = 3
+  maxTurns: number = 10
 ): AsyncGenerator<{
   type: 'agent_start' | 'agent_message' | 'agent_complete' | 'agent_error' | 'discussion_complete' | 'handoff' | 'agent_typing_start' | 'agent_typing_stop';
   agent?: string;
@@ -590,16 +626,15 @@ export async function* runAutonomousMultiAgentAnalysis(
     pitch: pitchContent,
     groupChat: [],
     activeAgents: [
-      'Business Model Analyst',
-      'Market & Competition Analyst', 
-      'Financial & Growth Analyst',
-      'Team & Execution Analyst',
-      'Pitch Presentation Analyst'
+      'Jakob Risgaard',
+      'Jesper Buch',
+      'Jan Lehrmann', 
+      'Christian Stadil',
+      'Tahir Siddique'
     ],
     maxTurns,
     currentTurn: 0,
-    discussionComplete: false,
-    pendingResponses: new Map()
+    discussionComplete: false
   };
 
   const agents = [
@@ -624,16 +659,32 @@ export async function* runAutonomousMultiAgentAnalysis(
       };
     }
 
+    // Track participation for balanced discussion
+    const agentParticipation = new Map<string, number>();
+    agents.forEach(agent => agentParticipation.set(agent.name, 0));
+
     // Run autonomous discussion loop
     while (discussionState.currentTurn < maxTurns && !discussionState.discussionComplete) {
       discussionState.currentTurn++;
       
       console.log(`\n=== AUTONOMOUS DISCUSSION TURN ${discussionState.currentTurn} ===`);
 
-      // Each agent gets a chance to contribute autonomously
-      for (const agent of agents) {
-        
-        try {
+      // Let the orchestrator decide who should speak next
+      const nextAgent = await letOrchestratorDecideNextAgent(agents, discussionState, agentParticipation);
+      
+      if (!nextAgent) {
+        console.log('No suitable agent found, ending discussion');
+        break;
+      }
+
+      // Increment participation count
+      agentParticipation.set(nextAgent.name, (agentParticipation.get(nextAgent.name) || 0) + 1);
+
+      console.log(`Selected agent: ${nextAgent.name} (participation: ${agentParticipation.get(nextAgent.name)})`);
+      
+      // Main agent responds
+      const agent = nextAgent;
+      
           // Create context-aware prompt with group chat history
           const recentMessages = discussionState.groupChat
             .slice(-6) // Last 6 messages for context
@@ -667,65 +718,32 @@ Continue the autonomous discussion:
 
 Stay engaged! This is live discussion.`;
 
-          // Use real OpenAI Agents instead of simulation - now works with Node.js runtime!
-          const response = await getRealAgentResponse(agent, contextPrompt, discussionState);
+      // Use consolidated agent response handler
+      for await (const event of processAgentResponse(agent, contextPrompt, discussionState)) {
+        yield event;
+      }
 
-          // Parse any tool calls or responses from the agent
-          console.log(`${agent.name} response:`, response);
-
-          // Add agent's contribution to group chat
-          const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          const groupMessage: GroupMessage = {
-            id: messageId,
-            sender: agent.name,
-            message: response,
-            timestamp: new Date(),
-            turn: discussionState.currentTurn,
-            needsResponse: response.includes('?') || response.includes('thoughts?') || response.includes('agree?')
-          };
-
-          // First, show typing indicator before the delay
-          yield {
-            type: 'agent_typing_start',
-            agent: agent.name,
-            turn: discussionState.currentTurn,
-            colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
-          };
-
-          // Random delay between 4-10 seconds to simulate natural conversation flow
-          // This prevents the agents from responding too quickly and makes the conversation feel more realistic
-          const randomDelay = Math.floor(Math.random() * 6000) + 4000; // 4000-10000ms (4-10 seconds)
-          await new Promise(resolve => setTimeout(resolve, randomDelay));
-
-          // Stop typing indicator and send the actual message
-          yield {
-            type: 'agent_typing_stop',
-            agent: agent.name,
-            turn: discussionState.currentTurn
-          };
-
-          discussionState.groupChat.push(groupMessage);
-
-          // Yield the actual message
-          yield {
-            type: 'agent_message',
-            agent: agent.name,
-            message: response,
-            turn: discussionState.currentTurn,
-            colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
-          };
-
-        } catch (agentError) {
-          console.error(`Error with autonomous ${agent.name}:`, agentError);
+      // Occasionally allow a second agent to chime in for more dynamic conversations
+      if (Math.random() < CONVERSATION_TIMING.FOLLOW_UP_CHANCE && discussionState.groupChat.length > 0) {
+        console.log('Adding follow-up response for more dynamic conversation...');
+        
+        // Let orchestrator select a different agent for follow-up
+        const followUpAgent = await letOrchestratorDecideNextAgent(
+          agents.filter(a => a.name !== nextAgent.name), 
+          discussionState, 
+          agentParticipation
+        );
+        
+        if (followUpAgent) {
+          agentParticipation.set(followUpAgent.name, (agentParticipation.get(followUpAgent.name) || 0) + 1);
+          console.log(`Follow-up agent: ${followUpAgent.name}`);
           
-          yield {
-            type: 'agent_error',
-            agent: agent.name,
-            message: 'Sorry, I encountered an error in the discussion. Continuing...',
-            turn: discussionState.currentTurn,
-            colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS],
-            error: agentError instanceof Error ? agentError.message : 'Unknown error'
-          };
+          // Quick follow-up response using consolidated handler
+          const followUpPrompt = `You just heard ${nextAgent.name}'s response about the pitch. Give a brief reaction or follow-up comment. Keep it short and natural - just 1-2 sentences.`;
+          
+          for await (const event of processAgentResponse(followUpAgent, followUpPrompt, discussionState, CONVERSATION_TIMING.FOLLOW_UP_DELAY)) {
+            yield event;
+          }
         }
       }
 
@@ -751,9 +769,9 @@ Stay engaged! This is live discussion.`;
     
     yield {
       type: 'agent_start',
-      agent: 'Pitch Analysis Orchestrator',
+      agent: 'Investment Committee Lead',
       turn: discussionState.currentTurn + 1,
-      colors: AGENT_COLORS['Pitch Analysis Orchestrator']
+      colors: AGENT_COLORS['Investment Committee Lead']
     };
 
     try {
@@ -771,10 +789,10 @@ Create a comprehensive Danish investment memo that summarizes all the key insigh
 
       yield {
         type: 'agent_complete',
-        agent: 'Pitch Analysis Orchestrator',
+        agent: 'Investment Committee Lead',
         message: finalSynthesis,
         turn: discussionState.currentTurn + 1,
-        colors: AGENT_COLORS['Pitch Analysis Orchestrator']
+        colors: AGENT_COLORS['Investment Committee Lead']
       };
 
     } catch (orchestratorError) {
@@ -782,10 +800,10 @@ Create a comprehensive Danish investment memo that summarizes all the key insigh
       
       yield {
         type: 'agent_error',
-        agent: 'Pitch Analysis Orchestrator',
+        agent: 'Investment Committee Lead',
         message: 'Error during synthesis. Please review the individual agent insights above.',
         turn: discussionState.currentTurn + 1,
-        colors: AGENT_COLORS['Pitch Analysis Orchestrator'],
+        colors: AGENT_COLORS['Investment Committee Lead'],
         error: orchestratorError instanceof Error ? orchestratorError.message : 'Synthesis error'
       };
     }
@@ -805,7 +823,7 @@ Create a comprehensive Danish investment memo that summarizes all the key insigh
 // Backward compatibility wrapper
 export async function runAutonomousMultiAgentPitchAnalysis(
   pitchContent: string, 
-  maxTurns: number = 3
+  maxTurns: number = 10
 ): Promise<{
   success: boolean;
   analysis?: string;
@@ -841,7 +859,7 @@ export async function runAutonomousMultiAgentPitchAnalysis(
     }
 
     const finalSynthesis = agentResponses
-      .filter(r => r.agent === 'Pitch Analysis Orchestrator')
+      .filter(r => r.agent === 'Investment Committee Lead')
       .pop()?.message || 'Autonomous analysis completed';
 
     return {

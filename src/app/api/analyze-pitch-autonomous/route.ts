@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
         try {
           console.log('🚀 Starting REAL autonomous agent discussion stream...');
           
-          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 1)) {
+          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 6)) {
             console.log('Streaming real AI event:', event.type, event.agent);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             

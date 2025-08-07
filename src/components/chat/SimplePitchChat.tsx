@@ -46,6 +46,7 @@ export function SimplePitchChat({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [activeTypers, setActiveTypers] = useState<Set<string>>(new Set()); // Track who's currently typing
   // const [initialized, setInitialized] = useState(false); // Future use
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -140,9 +141,6 @@ export function SimplePitchChat({
     isAnalyzingRef.current = true;
     
     setIsLoading(true);
-    
-    // Track typing indicators by agent name for more robust management
-    const typingIndicators = new Map<string, string>();
     
     try {
       // Add user message
@@ -278,26 +276,17 @@ export function SimplePitchChat({
                   break;
 
                 case 'agent_typing_start':
-                  // Show typing indicator for the agent
-                  const typingMessageId = addMessage(
-                    'assistant',
-                    '...',
-                    false,
-                    eventData.agent,
-                    eventData.colors,
-                    true
-                  );
-                  // Track this typing indicator by agent name
-                  typingIndicators.set(eventData.agent, typingMessageId);
+                  // Add agent to active typers set
+                  setActiveTypers(prev => new Set([...prev, eventData.agent]));
                   break;
 
                 case 'agent_typing_stop':
-                  // Remove typing indicator for the specific agent
-                  const agentTypingId = typingIndicators.get(eventData.agent);
-                  if (agentTypingId) {
-                    setMessages(prev => prev.filter(msg => msg.id !== agentTypingId));
-                    typingIndicators.delete(eventData.agent);
-                  }
+                  // Remove agent from active typers set
+                  setActiveTypers(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(eventData.agent);
+                    return newSet;
+                  });
                   break;
 
                 case 'error':
@@ -313,10 +302,8 @@ export function SimplePitchChat({
     } catch (error) {
       console.error('Error analyzing pitch:', error);
       
-      // Clean up any remaining typing indicators
-      typingIndicators.forEach(messageId => {
-        setMessages(prev => prev.filter(msg => msg.id !== messageId));
-      });
+      // Clear any active typing states
+      setActiveTypers(new Set());
       
       // Add error message
       addMessage(
@@ -325,10 +312,8 @@ export function SimplePitchChat({
         false
       );
     } finally {
-      // Clean up any remaining typing indicators on completion
-      typingIndicators.forEach(messageId => {
-        setMessages(prev => prev.filter(msg => msg.id !== messageId));
-      });
+      // Clear any remaining typing states on completion
+      setActiveTypers(new Set());
       setIsLoading(false);
       isAnalyzingRef.current = false;
     }
@@ -835,6 +820,63 @@ export function SimplePitchChat({
               );
             })}
             <div ref={messagesEndRef} />
+          </div>
+
+          {/* Group Member Typing Indicators - Bottom Right Corner */}
+          <div className="fixed bottom-20 right-4 flex items-center gap-0 z-50">
+            {/* All group members with typing indicators */}
+            {['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique'].map((agentName) => {
+              const isTyping = activeTypers.has(agentName);
+              
+              return (
+                <div key={agentName} className={`relative group -mr-2 transition-all duration-300 ${isTyping ? 'z-30 scale-110' : 'z-10'}`}>
+                  {/* Profile Image */}
+                  <div className="relative">
+                    <img
+                      src={getInvestorAvatar(agentName)}
+                      alt={agentName}
+                      className={`w-8 h-8 rounded-full object-cover border-2 transition-all duration-300 ${
+                        isTyping 
+                          ? 'border-[#25d366] shadow-lg shadow-[#25d366]/30' 
+                          : 'border-white/50'
+                      }`}
+                      onError={(e) => {
+                        // Fallback to colored circle with initials if image fails
+                        e.currentTarget.style.display = 'none';
+                        const container = e.currentTarget.parentElement;
+                        if (container && !container.querySelector('.fallback-typing-avatar')) {
+                          const fallback = document.createElement('div');
+                          fallback.className = `fallback-typing-avatar w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium border-2 transition-all duration-300 ${
+                            isTyping 
+                              ? 'border-[#25d366] shadow-lg shadow-[#25d366]/30' 
+                              : 'border-white/50'
+                          }`;
+                          fallback.style.backgroundColor = '#f3f4f6';
+                          fallback.style.color = '#6b7280';
+                          fallback.textContent = agentName.split(' ').map(n => n[0]).join('').toUpperCase();
+                          container.appendChild(fallback);
+                        }
+                      }}
+                    />
+                    
+                    {/* Typing indicator pulse */}
+                    {isTyping && (
+                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-[#25d366] rounded-full flex items-center justify-center">
+                        <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Typing tooltip - Always visible when typing */}
+                  {isTyping && (
+                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-white text-black text-[10px] rounded whitespace-nowrap transition-opacity duration-200 pointer-events-none animate-fade-in shadow-md border border-gray-200">
+                      {agentName} skriver...
+                      <div className="absolute top-full right-2 w-0 h-0 border-l-2 border-r-2 border-t-4 border-l-transparent border-r-transparent border-t-white"></div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
         
