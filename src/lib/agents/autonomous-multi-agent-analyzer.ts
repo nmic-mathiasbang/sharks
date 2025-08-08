@@ -1,7 +1,7 @@
 import { Agent, tool, Runner, RunContext } from '@openai/agents';
 import { z } from 'zod';
 // Simple comment: Single source of truth for default turns
-export const DEFAULT_MAX_TURNS = 6;
+export const DEFAULT_MAX_TURNS = 10;
 
 
 // Model configuration - Using latest GPT-4.1 mini for fast, efficient responses
