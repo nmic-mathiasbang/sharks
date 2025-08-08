@@ -1,5 +1,8 @@
 import { Agent, tool, Runner, RunContext } from '@openai/agents';
 import { z } from 'zod';
+// Simple comment: Single source of truth for default turns
+export const DEFAULT_MAX_TURNS = 6;
+
 
 // Model configuration - Using latest GPT-4.1 mini for fast, efficient responses
 const MODEL_CONFIG = {
@@ -17,9 +20,9 @@ const ORCHESTRATOR_CONFIG = {
 
 // Timing constants for natural conversation flow
 const CONVERSATION_TIMING = {
-  MAIN_RESPONSE_DELAY: { min: 2000, max: 3000 }, // 2-3 seconds
-  FOLLOW_UP_DELAY: { min: 1000, max: 3000 }, // 1-3 seconds
-  FOLLOW_UP_CHANCE: 0.2 // 20% chance for follow-up responses
+  MAIN_RESPONSE_DELAY: { min: 100, max: 200 }, // 2-3 milliseconds
+  FOLLOW_UP_DELAY: { min: 100, max: 200 }, // 1-3 milliseconds
+  FOLLOW_UP_CHANCE: 0.6 // 20% chance for follow-up responses
 } as const;
 
 // Agent color configuration
@@ -736,7 +739,7 @@ Respond with ONLY the full name of the investor who should speak next. Examples:
 // Autonomous multi-agent discussion runner
 export async function* runAutonomousMultiAgentAnalysis(
   pitchContent: string, 
-  maxTurns: number = 10,
+  maxTurns: number = DEFAULT_MAX_TURNS,
   selectedInvestors?: string[]
 ): AsyncGenerator<{
   type: 'agent_start' | 'agent_message' | 'agent_complete' | 'agent_error' | 'discussion_complete' | 'handoff' | 'agent_typing_start' | 'agent_typing_stop';
@@ -955,7 +958,7 @@ Create a comprehensive Danish investment memo that summarizes all the key insigh
 // Backward compatibility wrapper
 export async function runAutonomousMultiAgentPitchAnalysis(
   pitchContent: string, 
-  maxTurns: number = 10
+  maxTurns: number = DEFAULT_MAX_TURNS
 ): Promise<{
   success: boolean;
   analysis?: string;

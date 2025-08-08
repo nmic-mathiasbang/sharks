@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { runAutonomousMultiAgentAnalysis } from '@/lib/agents/autonomous-multi-agent-analyzer';
+import { runAutonomousMultiAgentAnalysis, DEFAULT_MAX_TURNS } from '@/lib/agents/autonomous-multi-agent-analyzer';
 
 export const runtime = 'nodejs'; // Enable Node.js runtime for OpenAI Agents
 
@@ -21,7 +21,8 @@ export async function POST(request: NextRequest) {
         try {
           console.log('🚀 Starting REAL autonomous agent discussion stream...');
           
-          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 6, Array.isArray(investors) ? investors : undefined)) {
+          const turns = typeof maxTurns === 'number' && maxTurns > 0 ? maxTurns : DEFAULT_MAX_TURNS;
+          for await (const event of runAutonomousMultiAgentAnalysis(pitch, turns, Array.isArray(investors) ? investors : undefined)) {
             console.log('Streaming real AI event:', event.type, event.agent);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             
