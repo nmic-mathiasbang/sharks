@@ -1,4 +1,4 @@
-import { Agent, tool, run } from '@openai/agents';
+import { Agent, tool, Runner, RunContext } from '@openai/agents';
 import { z } from 'zod';
 
 // Model configuration - Using latest GPT-4.1 mini for fast, efficient responses
@@ -44,11 +44,47 @@ export const AGENT_COLORS = {
     background: '#E9F3F7',
     text: '#487CA5'
   },
+  // Simple comment: Additional investors
+  'Christian Arnstedt': {
+    background: '#EDEAFF',
+    text: '#5F53B3'
+  },
+  'Louise Herping Ellegaard': {
+    background: '#FFF0F5',
+    text: '#B24E7D'
+  },
+  'Anne Stampe Olesen': {
+    background: '#EAF7F1',
+    text: '#2F7A56'
+  },
+  'Morten Larsen': {
+    background: '#F1F5FF',
+    text: '#3C6EE1'
+  },
+  'Nikolaj Nyholm': {
+    background: '#FFF8EA',
+    text: '#B07A2A'
+  },
   'Investment Committee Lead': {
     background: '#F6F3F8',
     text: '#8A67AB'
   }
 } as const;
+
+// Shared Runner instance for consistent streaming, tracing and configuration
+// Simple comment: We create one Runner to manage model calls and enable streaming events
+const runner = new Runner({
+  // Simple comment: Name the workflow and attach lightweight trace metadata for observability
+  workflowName: 'Løvens Hule – Autonomous Chat',
+  traceMetadata: {
+    feature: 'autonomous-multi-agent-analysis',
+  },
+});
+
+// Simple comment: Context object passed to the Runner; tools can access while LLM cannot see it
+interface AppRunContext extends RunContext {
+  discussionState: AutonomousDiscussionState;
+}
 
 // Helper function to create natural conversation delays
 function getRandomDelay(delayConfig: { min: number; max: number }): number {
@@ -83,15 +119,8 @@ async function* processAgentResponse(
     const responseDelay = getRandomDelay(delayConfig);
     await new Promise(resolve => setTimeout(resolve, responseDelay));
 
-    // Stop typing indicator
-    yield {
-      type: 'agent_typing_stop',
-      agent: agent.name,
-      turn: discussionState.currentTurn,
-      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
-    };
-
-    // Get agent response
+    // Get agent response while keeping typing indicator active
+    // Simple comment: We stop typing right before emitting the final message
     const response = await getRealAgentResponse(agent, prompt, discussionState);
 
     // Create and store group message
@@ -105,6 +134,14 @@ async function* processAgentResponse(
     };
 
     discussionState.groupChat.push(groupMessage);
+
+    // Stop typing indicator
+    yield {
+      type: 'agent_typing_stop',
+      agent: agent.name,
+      turn: discussionState.currentTurn,
+      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
+    };
 
     // Yield the message
     yield {
@@ -173,7 +210,8 @@ function getResponseLengthGuidance(agentName: string, discussionState: Autonomou
   }
 }
 
-// Real OpenAI Agent response function - replaces simulation
+// Real OpenAI Agent response function using Runner streaming
+// Simple comment: Run the agent with streaming and collect text output while preserving our event model
 async function getRealAgentResponse(agent: Agent, prompt: string, discussionState: AutonomousDiscussionState): Promise<string> {
   // Build dynamic context-aware prompt
   const recentMessages = discussionState.groupChat.slice(-5);
@@ -200,9 +238,18 @@ Use your personality and expertise. Reference other agents naturally when releva
 Current discussion context: This is turn ${discussionState.currentTurn} of the discussion.`;
 
   try {
-    // Let the real LLM agent generate a natural response
-    const result = await run(agent, contextualPrompt);
-    return result.finalOutput || `${agent.name} provides insights about the pitch.`;
+    // Simple comment: Execute with SDK streaming, providing context so tools can read state if needed
+    const stream = await runner.run(agent, contextualPrompt, {
+      stream: true,
+      context: { discussionState } as AppRunContext,
+    });
+
+    // Simple comment: Accumulate streamed text into a single message for our UI
+    let text = '';
+    for await (const chunk of stream.toTextStream({ compatibleWithNodeStreams: false })) {
+      text += chunk;
+    }
+    return text.trim() || `${agent.name} provides insights about the pitch.`;
   } catch (error) {
     console.error(`Error getting real response from ${agent.name}:`, error);
     return `${agent.name} is analyzing the pitch... (Error: ${error instanceof Error ? error.message : 'Unknown error'})`;
@@ -463,17 +510,84 @@ Du hjælper folk med at fortælle deres historie så den rammer hjertet!`,
   modelSettings: MODEL_CONFIG,
 });
 
+// 6+. Additional Agents based on Agent-persona.md
+export const autonomousChristianArnstedt = new Agent({
+  name: 'Christian Arnstedt',
+  instructions: `Du er Christian Arnstedt — “Speed & Numbers”.
+
+VIGTIG: Vær hurtig, skarp og talfikseret. Spot DTC-motorer, funnel-effektivitet og skalerbare kanaler.
+- Stil korte, direkte spørgsmål om ROAS vs. MER, kanalmix og sammenhæng mellem pris og COGS.
+- Fokuser på 90-dages vækstplaner og performance-trancher.
+
+Fokus: Vækstmotor, payback og skalering uden at knække driften.`,
+  tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
+  modelSettings: MODEL_CONFIG,
+});
+
+export const autonomousLouiseHerping = new Agent({
+  name: 'Louise Herping Ellegaard',
+  instructions: `Du er Louise Herping Ellegaard — “DTC-kuratøren”.
+
+VIGTIG: Kig efter smag, abonnementslogik og loyalitet. Vær skarp på kunderejse og retention.
+- Spørg til kohorter, gentegningsrate, NPS og packaging som vækstdriver.
+
+Fokus: Abonnement/CLV-optimering, loyalitet og produkt-oplevelse.`,
+  tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
+  modelSettings: MODEL_CONFIG,
+});
+
+export const autonomousAnneStampe = new Agent({
+  name: 'Anne Stampe Olesen',
+  instructions: `Du er Anne Stampe Olesen — “Produkt-arkitekten”.
+
+VIGTIG: Insistér på produkt-market-fit. Dyk dybt i problem/solution, brugerindsigt og roadmap.
+- Spørg: Hvilket smertepunkt? Hvilken evidens? Hvilke læringsloops?
+
+Fokus: Læringsdrevne milepæle og evidens for PMF.`,
+  tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
+  modelSettings: MODEL_CONFIG,
+});
+
+export const autonomousMortenLarsen = new Agent({
+  name: 'Morten Larsen',
+  instructions: `Du er Morten Larsen — “Operations-barberen”.
+
+VIGTIG: Skær alt overflødigt. Tænk processer, cost-to-serve, SLA og skalerbar drift.
+- Spørg til flaskehalse, takt-tid, leverandør-risiko og enhedsøkonomi i praksis.
+
+Fokus: Drift der virker i virkeligheden, ikke kun på slides.`,
+  tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
+  modelSettings: MODEL_CONFIG,
+});
+
+export const autonomousNikolajNyholm = new Agent({
+  name: 'Nikolaj Nyholm',
+  instructions: `Du er Nikolaj Nyholm — “Platform-/Tech-oraklet”.
+
+VIGTIG: Jagt systemiske moats: netværkseffekter, platforme, spil/creator-økonomi, infra/AI.
+- Spørg: Hvad bliver stærkere, jo større det bliver? API/økosystem?
+
+Fokus: Varige platform-fordele og tekniske milepæle.`,
+  tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
+  modelSettings: MODEL_CONFIG,
+});
+
 // 6. Autonomous Orchestrator Agent - Manages the group discussion
 export const autonomousOrchestrator = new Agent({
   name: 'Investment Committee Lead',
   instructions: `🎯 Du er Investment Committee Lead og faciliterer Løvens Hule investor diskussionen!
 
-Du dirigerer og koordinerer 5 erfarne danske investorer:
-💰 Jakob Risgaard - Forretningsmodel og rentabilitet
-🚀 Jesper Buch - Marked og konkurrence  
-📊 Jan Lehrmann - Finansielle analyser og vækst
-👥 Christian Stadil - Team og eksekveringsevne
-🎤 Tahir Siddique - Kommunikation og formidling
+ Du dirigerer og koordinerer disse erfarne danske investorer:
+ 💰 Jakob Risgaard - Forretningsmodel og rentabilitet
+ 🚀 Jesper Buch - Marked og konkurrence  
+ 📊 Jan Lehrmann - Finansielle analyser og vækst
+ 👥 Christian Stadil - Team og eksekveringsevne
+ 🎤 Tahir Siddique - Kommunikation og formidling
+ ⚡️ Christian Arnstedt - Speed & Numbers
+ 🛍️ Louise Herping Ellegaard - DTC & loyalitet
+ 🧩 Anne Stampe Olesen - Produkt & PMF
+ 🪚 Morten Larsen - Operations & drift
+ 🧠 Nikolaj Nyholm - Platform/Tech moats
 
 Som facilitator skal du:
 1. **Dirigere Samtalen**: Beslut hvem der skal tale næst baseret på:
@@ -488,8 +602,9 @@ Som facilitator skal du:
 
 4. **Facilitere Naturligt Flow**: Som en rigtig mødeleder der sørger for produktiv diskussion
 
-Når du bliver bedt om at vælge næste taler, skal du ALTID svare med kun det fulde navn:
-"Jakob Risgaard" eller "Jesper Buch" eller "Jan Lehrmann" eller "Christian Stadil" eller "Tahir Siddique"
+ Når du bliver bedt om at vælge næste taler, skal du ALTID svare med kun det fulde navn:
+ "Jakob Risgaard" eller "Jesper Buch" eller "Jan Lehrmann" eller "Christian Stadil" eller "Tahir Siddique" eller
+ "Christian Arnstedt" eller "Louise Herping Ellegaard" eller "Anne Stampe Olesen" eller "Morten Larsen" eller "Nikolaj Nyholm"
 
 Når diskussion er færdig, lav struktureret investment memo på dansk med:
 1. **Executive Summary** (2-3 sætninger)
@@ -540,6 +655,11 @@ Available investors:
 - Jan Lehrmann (Financial & growth expert)
 - Christian Stadil (Team & execution expert)
 - Tahir Siddique (Communication & presentation expert)
+- Christian Arnstedt (Speed & Numbers)
+- Louise Herping Ellegaard (DTC & loyalty)
+- Anne Stampe Olesen (Product & PMF)
+- Morten Larsen (Operations & execution)
+- Nikolaj Nyholm (Platform/Tech moats)
 
 Who should speak next? Consider:
 1. What expertise is most relevant to recent discussion?
@@ -552,7 +672,12 @@ Respond with ONLY the full name of the investor who should speak next. Examples:
 "Jesper Buch"
 "Jan Lehrmann"
 "Christian Stadil"
-"Tahir Siddique"`;
+"Tahir Siddique"
+"Christian Arnstedt"
+"Louise Herping Ellegaard"
+"Anne Stampe Olesen"
+"Morten Larsen"
+"Nikolaj Nyholm"`;
 
   try {
     // Ask the orchestrator to decide
@@ -611,7 +736,8 @@ Respond with ONLY the full name of the investor who should speak next. Examples:
 // Autonomous multi-agent discussion runner
 export async function* runAutonomousMultiAgentAnalysis(
   pitchContent: string, 
-  maxTurns: number = 10
+  maxTurns: number = 10,
+  selectedInvestors?: string[]
 ): AsyncGenerator<{
   type: 'agent_start' | 'agent_message' | 'agent_complete' | 'agent_error' | 'discussion_complete' | 'handoff' | 'agent_typing_start' | 'agent_typing_stop';
   agent?: string;
@@ -625,25 +751,31 @@ export async function* runAutonomousMultiAgentAnalysis(
   const discussionState: AutonomousDiscussionState = {
     pitch: pitchContent,
     groupChat: [],
-    activeAgents: [
-      'Jakob Risgaard',
-      'Jesper Buch',
-      'Jan Lehrmann', 
-      'Christian Stadil',
-      'Tahir Siddique'
-    ],
+    activeAgents: [],
     maxTurns,
     currentTurn: 0,
     discussionComplete: false
   };
 
-  const agents = [
+  const allAgents = [
     autonomousBusinessModelAnalyst,
     autonomousMarketAnalyst,
     autonomousFinancialAnalyst,
     autonomousTeamAnalyst,
-    autonomousPresentationAnalyst
+    autonomousPresentationAnalyst,
+    // Simple comment: New investors added from persona doc
+    autonomousChristianArnstedt,
+    autonomousLouiseHerping,
+    autonomousAnneStampe,
+    autonomousMortenLarsen,
+    autonomousNikolajNyholm
   ];
+
+  const agents = selectedInvestors && selectedInvestors.length
+    ? allAgents.filter(a => selectedInvestors.includes(a.name))
+    : allAgents;
+
+  discussionState.activeAgents = agents.map(a => a.name);
 
   try {
     // Start the autonomous discussion

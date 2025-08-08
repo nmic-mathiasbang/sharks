@@ -5,7 +5,7 @@ export const runtime = 'nodejs'; // Enable Node.js runtime for OpenAI Agents
 
 export async function POST(request: NextRequest) {
   try {
-    const { pitch, maxTurns } = await request.json();
+    const { pitch, maxTurns, investors } = await request.json();
 
     if (!pitch || typeof pitch !== 'string') {
       return new NextResponse(JSON.stringify({ success: false, error: 'Pitch content is required' }), { status: 400 });
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
         try {
           console.log('🚀 Starting REAL autonomous agent discussion stream...');
           
-          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 6)) {
+          for await (const event of runAutonomousMultiAgentAnalysis(pitch, maxTurns || 6, Array.isArray(investors) ? investors : undefined)) {
             console.log('Streaming real AI event:', event.type, event.agent);
             controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
             

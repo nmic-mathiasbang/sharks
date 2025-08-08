@@ -1,34 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { SimplePitchChat } from "@/components/chat/SimplePitchChat";
+import { StartPitchForm } from "@/components/chat/StartPitchForm";
+import { FloatingInvestors } from "@/components/chat/FloatingInvestors";
 
 export default function Home() {
   // State to manage the input value and chat
-  const [inputValue, setInputValue] = useState("");
   const [showChat, setShowChat] = useState(false);
   const [initialPitch, setInitialPitch] = useState("");
+  const [selectedInvestors, setSelectedInvestors] = useState<string[]>([]);
   // Always use autonomous mode for Løvens Hule group chat
   const analysisMode = 'autonomous';
   const maxTurns = 3;
+  const allInvestors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm'];
 
-  // Handle form submission
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!inputValue.trim()) return;
-    
-    // Set the initial pitch and show the chat interface
-    setInitialPitch(inputValue.trim());
+  // Simple comment: Submit from StartPitchForm includes selected investors
+  const handleSubmit = (pitch: string, investors: string[]) => {
+    setInitialPitch(pitch);
+    setSelectedInvestors(investors);
     setShowChat(true);
   };
 
   // Handle starting over
   const handleStartOver = () => {
     setShowChat(false);
-    setInputValue("");
     setInitialPitch("");
+    setSelectedInvestors([]);
   };
 
 
@@ -41,6 +39,7 @@ export default function Home() {
           initialPitch={initialPitch} 
           analysisMode={analysisMode}
           maxTurns={maxTurns}
+          investors={selectedInvestors.length ? selectedInvestors : allInvestors}
         />
         
         {/* Floating Action Icons */}
@@ -82,38 +81,16 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-background">
-      <main className="w-full max-w-md space-y-8">
-        {/* Main heading */}
-        <h1 className="text-4xl font-bold text-center text-foreground">
-          Løvens hule gruppechat
+    <div className="relative min-h-screen flex flex-col items-center justify-center p-8 overflow-visible" style={{ backgroundColor: '#fcf5eb' }}>
+      {/* Simple comment: Decorative floating investors */}
+      <FloatingInvestors />
+      <main className="relative z-10 w-full flex flex-col items-center space-y-6">
+        <h1 className="text-center text-5xl sm:text-6xl font-extrabold tracking-tight text-black">
+        Tænk hvis din pitch blev kastet for løverne!
         </h1>
-        
-        {/* Description */}
-        <div className="text-center space-y-2">
-          <p className="text-muted-foreground">
-            tænk hvis din elevator pitch ved et uheld landede i gruppechatten for løvens hule investorene
-          </p>
+        <div className="text-center">
         </div>
-        
-        {/* Input form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <textarea
-            placeholder="Skriv dit pitch her... (f.eks. 'Vi bygger en SaaS platform der hjælper små virksomheder med at administrere deres lager mere effektivt. Vores målgruppe er detailhandlere med 1-50 ansatte som i dag bruger Excel...')"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            className="w-full min-h-[120px] p-3 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent resize-none"
-            rows={5}
-          />
-          <Button 
-            type="submit" 
-            className="w-full"
-            disabled={!inputValue.trim()}
-          >
-            Pitch investors
-          </Button>
-        </form>
-
+        <StartPitchForm onSubmit={handleSubmit} allInvestors={allInvestors} defaultSelected={allInvestors} />
       </main>
     </div>
   );
