@@ -10,6 +10,9 @@ export default function Home() {
   const [showChat, setShowChat] = useState(false);
   const [initialPitch, setInitialPitch] = useState("");
   const [selectedInvestors, setSelectedInvestors] = useState<string[]>([]);
+  const [hoveredInvestor, setHoveredInvestor] = useState<string | null>(null);
+  // Simple comment: Track which investors are toggled OFF (persist their exit bubble)
+  const [toggledOff, setToggledOff] = useState<Record<string, boolean>>({});
   // Always use autonomous mode for Løvens Hule group chat
   const analysisMode = 'autonomous';
   const maxTurns = 3;
@@ -20,6 +23,10 @@ export default function Home() {
     setInitialPitch(pitch);
     setSelectedInvestors(investors);
     setShowChat(true);
+  };
+  // Simple comment: Persist OFF state until toggled back ON
+  const handleToggleInvestor = (name: string, selected: boolean) => {
+    setToggledOff((prev) => ({ ...prev, [name]: !selected }));
   };
 
   // Handle starting over
@@ -83,14 +90,21 @@ export default function Home() {
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center p-8 overflow-visible" style={{ backgroundColor: '#fcf5eb' }}>
       {/* Simple comment: Decorative floating investors */}
-      <FloatingInvestors />
+      {/* Simple comment: Pass hovered investor and OFF-state to control bubbles */}
+      <FloatingInvestors hoveredName={hoveredInvestor} toggledOff={toggledOff} />
       <main className="relative z-10 w-full flex flex-col items-center space-y-6">
         <h1 className="text-center text-5xl sm:text-6xl font-extrabold tracking-tight text-black">
         Tænk hvis din pitch blev kastet for løverne!
         </h1>
         <div className="text-center">
         </div>
-        <StartPitchForm onSubmit={handleSubmit} allInvestors={allInvestors} defaultSelected={allInvestors} />
+        <StartPitchForm 
+          onSubmit={handleSubmit} 
+          allInvestors={allInvestors} 
+          defaultSelected={allInvestors}
+          onHoverInvestor={setHoveredInvestor}
+          onToggleInvestor={handleToggleInvestor}
+        />
       </main>
     </div>
   );
