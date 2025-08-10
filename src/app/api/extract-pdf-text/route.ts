@@ -2,10 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Simple comment: Parse PDF bytes to text using pdf-parse
+// Simple comment: Parse PDF bytes to text using pdf-parse (handle CJS/ESM default)
 async function parsePdf(buffer: Buffer): Promise<{ text: string; numPages?: number }> {
-  const pdfParse = (await import('pdf-parse')).default as unknown as (buf: Buffer) => Promise<{ text: string; numpages?: number; numPages?: number; info?: unknown }>;
-  const res = await pdfParse(buffer) as any;
+  const mod: any = await import('pdf-parse');
+  const pdfParse = (mod?.default || mod) as (buf: Buffer) => Promise<any>;
+  const res = await pdfParse(buffer);
   const pages = res.numpages ?? res.numPages;
   return { text: res.text || '', numPages: pages };
 }
@@ -24,7 +25,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing file field' }, { status: 400 });
     }
 
-    if (file.type !== 'application/pdf') {
+    // Some environments may not set a precise file.type; accept by extension as fallback
+    const name = file.name || '';
+    const looksPdfByName = name.toLowerCase().endsWith('.pdf');
+    if (file.type !== 'application/pdf' && !looksPdfByName) {
       return NextResponse.json({ error: 'Only application/pdf is allowed' }, { status: 415 });
     }
 
@@ -55,9 +59,10 @@ export async function POST(req: NextRequest) {
         truncated,
       },
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('extract-pdf-text error:', err);
-    return NextResponse.json({ error: 'Failed to parse PDF' }, { status: 500 });
+    const message = typeof err?.message === 'string' ? err.message : 'Failed to parse PDF';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 
