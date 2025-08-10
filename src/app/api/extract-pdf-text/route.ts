@@ -12,12 +12,13 @@ async function parsePdf(buffer: Buffer): Promise<{ text: string; numPages?: numb
     return { text: res.text || '', numPages: pages };
   } catch (err) {
     // Fallback to pdfjs-dist
-    const pdfjs: any = await import('pdfjs-dist');
-    // Ensure worker is set for Node
+    // Import ESM build and treat as any to avoid TS type resolution issues in API route
+    const pdfjs: any = await import('pdfjs-dist/build/pdf.mjs');
+    // In Node, disable worker to avoid bundling errors
     if (pdfjs?.GlobalWorkerOptions) {
-      pdfjs.GlobalWorkerOptions.workerSrc = require('pdfjs-dist/build/pdf.worker.js');
+      pdfjs.GlobalWorkerOptions.workerSrc = undefined as any;
     }
-    const loadingTask = pdfjs.getDocument({ data: buffer });
+    const loadingTask = pdfjs.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false, disableFontFace: true });
     const pdf = await loadingTask.promise;
     const numPages = pdf.numPages;
     let text = '';
