@@ -107,12 +107,6 @@ export function SimplePitchChat({
       // Add user message
       addMessage('user', pitch);
       
-      // Add loading assistant message
-      const loadingText = analysisMode === 'autonomous' 
-        ? "🇩🇰 Starter Løvens Hule diskussion... Danske investorer vil diskutere naturligt med 4-10 sekunder mellem beskeder."
-        : "Starter multi-agent analyse... Specialist agenter vil svare i real-time.";
-      const loadingId = addMessage('assistant', loadingText, true);
-      
       // Call appropriate streaming API based on mode
       const apiEndpoint = analysisMode === 'autonomous' 
         ? '/api/analyze-pitch-autonomous'
@@ -132,8 +126,7 @@ export function SimplePitchChat({
         throw new Error("HTTP error! status: " + response.status);
       }
 
-      // Remove loading message
-      setMessages(prev => prev.filter(msg => msg.id !== loadingId));
+      // No initial loading message to remove
 
       // Handle streaming response
       const reader = response.body?.getReader();
