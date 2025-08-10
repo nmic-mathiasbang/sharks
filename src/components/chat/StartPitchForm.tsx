@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InvestorAvatar } from "./InvestorAvatar";
+import { PdfAttachment } from "./types";
 
 // Simple comment: Start form with textarea and investor toggles
 export function StartPitchForm({
@@ -12,7 +13,7 @@ export function StartPitchForm({
   onHoverInvestor,
   onToggleInvestor,
 }: {
-  onSubmit: (pitch: string, selectedInvestors: string[]) => void;
+  onSubmit: (pitch: string, selectedInvestors: string[], pdfAttachment?: PdfAttachment) => void;
   allInvestors: string[];
   defaultSelected?: string[];
   onHoverInvestor?: (name: string | null) => void;
@@ -62,10 +63,19 @@ export function StartPitchForm({
         const data = await res.json();
         const extracted: string = (data?.text || '').trim();
         if (!extracted) {
-          setPdfError('PDF’en indeholdt ikke læsbar tekst.');
+          setPdfError('PDF-filen indeholdt ikke læsbar tekst.');
           return;
         }
-        onSubmit(extracted, Array.from(selected));
+        
+        // Create PDF attachment metadata for display
+        const pdfAttachment: PdfAttachment = {
+          fileName: pdfFile.name,
+          size: pdfFile.size,
+          pageCount: data?.meta?.numPages || 1,
+          extractedText: extracted
+        };
+        
+        onSubmit(extracted, Array.from(selected), pdfAttachment);
       } catch (err: any) {
         setPdfError(err?.message || 'Uventet fejl ved PDF upload.');
       } finally {

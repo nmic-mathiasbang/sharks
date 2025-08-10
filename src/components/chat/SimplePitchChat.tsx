@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Message } from "./types";
+import { Message, PdfAttachment } from "./types";
 import { LeftIconMenu } from "./LeftIconMenu";
 import { ChatSidebar } from "./ChatSidebar";
 import { ChatHeader } from "./ChatHeader";
@@ -14,13 +14,15 @@ interface SimplePitchChatProps {
   analysisMode?: 'original' | 'quick' | 'multi-agent' | 'autonomous';
   maxTurns?: number;
   investors?: string[]; // Simple comment: Selected investors for this chat
+  pdfAttachment?: PdfAttachment; // Simple comment: Optional PDF attachment for display
 }
 
 export function SimplePitchChat({ 
   initialPitch, 
   analysisMode = 'original', 
   maxTurns = 18,
-  investors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm']
+  investors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm'],
+  pdfAttachment
 }: SimplePitchChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -52,7 +54,8 @@ export function SimplePitchChat({
     loading = false, 
     agentName?: string,
     colors?: { background: string; text: string },
-    isStreaming = false
+    isStreaming = false,
+    pdf?: PdfAttachment
   ): string => {
     const id = generateId();
     const newMessage: Message = {
@@ -64,6 +67,7 @@ export function SimplePitchChat({
       agentName,
       colors,
       isStreaming,
+      pdfAttachment: pdf,
     };
     
     setMessages(prev => [...prev, newMessage]);
@@ -104,8 +108,8 @@ export function SimplePitchChat({
     setIsLoading(true);
     
     try {
-      // Add user message
-      addMessage('user', pitch);
+      // Add user message (with PDF attachment if provided)
+      addMessage('user', pitch, false, undefined, undefined, false, pdfAttachment);
       
       // Call appropriate streaming API based on mode
       const apiEndpoint = analysisMode === 'autonomous' 

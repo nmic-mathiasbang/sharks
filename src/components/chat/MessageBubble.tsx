@@ -3,6 +3,7 @@
 import React from "react";
 import { Message } from "./types";
 import { InvestorAvatar } from "./InvestorAvatar";
+import { PdfDocumentCard } from "./PdfDocumentCard";
 
 // Renders a single message bubble with optional agent avatar and colors
 export function MessageBubble({ message }: { message: Message }) {
@@ -82,14 +83,19 @@ export function MessageBubble({ message }: { message: Message }) {
                 </div>
               )}
 
-              <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                {message.content.split('\n').map((line, idx, arr) => (
-                  <React.Fragment key={`l-${idx}`}>
-                    {renderWithMentions(line)}
-                    {idx < arr.length - 1 ? <br /> : null}
-                  </React.Fragment>
-                ))}
-              </div>
+              {/* Show PDF card if message has PDF attachment */}
+              {message.pdfAttachment ? (
+                <PdfDocumentCard pdf={message.pdfAttachment} />
+              ) : (
+                <div className="text-sm leading-relaxed whitespace-pre-wrap">
+                  {message.content.split('\n').map((line, idx, arr) => (
+                    <React.Fragment key={`l-${idx}`}>
+                      {renderWithMentions(line)}
+                      {idx < arr.length - 1 ? <br /> : null}
+                    </React.Fragment>
+                  ))}
+                </div>
+              )}
 
               <div className={isUser ? 'flex items-center justify-end gap-1 mt-2 text-xs text-[#ffffff99]' : 'flex items-center justify-end gap-1 mt-2 text-xs text-[#667781]'}>
                 {/* Format time in Danish locale (e.g., 17.28) */}

@@ -4,12 +4,14 @@ import { useState } from "react";
 import { SimplePitchChat } from "@/components/chat/SimplePitchChat";
 import { StartPitchForm } from "@/components/chat/StartPitchForm";
 import { FloatingInvestors } from "@/components/chat/FloatingInvestors";
+import { PdfAttachment } from "@/components/chat/types";
 
 export default function Home() {
   // State to manage the input value and chat
   const [showChat, setShowChat] = useState(false);
   const [initialPitch, setInitialPitch] = useState("");
   const [selectedInvestors, setSelectedInvestors] = useState<string[]>([]);
+  const [pdfAttachment, setPdfAttachment] = useState<PdfAttachment | undefined>();
   const [hoveredInvestor, setHoveredInvestor] = useState<string | null>(null);
   // Simple comment: Track which investors are toggled OFF (persist their exit bubble)
   const [toggledOff, setToggledOff] = useState<Record<string, boolean>>({});
@@ -17,10 +19,11 @@ export default function Home() {
   const analysisMode = 'autonomous';
   const allInvestors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm'];
 
-  // Simple comment: Submit from StartPitchForm includes selected investors
-  const handleSubmit = (pitch: string, investors: string[]) => {
+  // Simple comment: Submit from StartPitchForm includes selected investors and optional PDF attachment
+  const handleSubmit = (pitch: string, investors: string[], pdf?: PdfAttachment) => {
     setInitialPitch(pitch);
     setSelectedInvestors(investors);
+    setPdfAttachment(pdf);
     setShowChat(true);
   };
   // Simple comment: Persist OFF state until toggled back ON
@@ -33,6 +36,7 @@ export default function Home() {
     setShowChat(false);
     setInitialPitch("");
     setSelectedInvestors([]);
+    setPdfAttachment(undefined);
   };
 
 
@@ -45,6 +49,7 @@ export default function Home() {
           initialPitch={initialPitch} 
           analysisMode={analysisMode}
           investors={selectedInvestors.length ? selectedInvestors : allInvestors}
+          pdfAttachment={pdfAttachment}
         />
         
         {/* Floating Action Icons */}
