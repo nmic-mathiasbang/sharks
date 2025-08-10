@@ -2,6 +2,7 @@
 
 import React from "react";
 import { PdfAttachment } from "./types";
+import Image from "next/image";
 
 interface PdfDocumentCardProps {
   pdf: PdfAttachment;
@@ -18,24 +19,16 @@ export function PdfDocumentCard({ pdf }: PdfDocumentCardProps) {
 
   return (
     <div className="bg-[#f0f2f5] rounded-lg p-3 max-w-xs border border-[#e9edef]">
-      {/* PDF Preview Header */}
-      <div className="bg-white rounded-md p-3 mb-2 border border-[#e9edef]">
-        <div className="text-xs text-[#667781] mb-1 font-medium">
-          Forretningsplan: Tinder for VC'er
-        </div>
-        <div className="text-xs text-[#667781] mb-2">
-          Resumé
-        </div>
-        <div className="text-xs text-[#667781] leading-relaxed">
-          Tinder for VC'er er en mobil-først platform, der forbinder venturekapitalister (VC'er) med 
-          lovende startups på en hurtig, intuitiv og datadrevet måde. Ved at kombinere 
-          swipe-baserede interaktioner, AI-drevet matching og realtids notifikationer om 
-          investeringsmuligheder reducerer platformen friktionen i opdagelsen af startups og 
-          accelererer investeringsprocessen.
-        </div>
-        <div className="text-xs text-[#667781] mt-2 font-medium">
-          Problem
-        </div>
+      {/* Simple comment: Static preview image of the PDF (from /public/pdf-preview.png) */}
+      <div className="relative w-full h-32 sm:h-36 md:h-40 rounded-md overflow-hidden mb-2 border border-[#e9edef] bg-white">
+        <Image
+          src="/assets/pdf-preview.png"
+          alt={pdf.fileName}
+          fill
+          sizes="(max-width: 768px) 240px, 320px"
+          className="object-cover"
+          priority
+        />
       </div>
 
       {/* PDF File Info */}

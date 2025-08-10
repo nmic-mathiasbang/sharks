@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { InvestorAvatar } from "./InvestorAvatar";
 import { PdfAttachment } from "./types";
@@ -23,6 +23,9 @@ export function StartPitchForm({
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfError, setPdfError] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
+  // Simple comment: Track drag state for drag-and-drop UX
+  const [isDragging, setIsDragging] = useState(false);
+  const dragDepthRef = useRef(0); // Simple comment: Handle nested dragenter/dragleave events
   const initial = useMemo(() => new Set(defaultSelected && defaultSelected.length ? defaultSelected : allInvestors), [allInvestors, defaultSelected]);
   const [selected, setSelected] = useState<Set<string>>(initial);
 
@@ -89,41 +92,108 @@ export function StartPitchForm({
     onSubmit(pitch, Array.from(selected));
   };
 
+  // Simple comment: Validate and set PDF file after drop
+  const trySetPdfFromFile = (file: File | null | undefined) => {
+    setPdfError("");
+    if (!file) return;
+    if (file.type !== "application/pdf") {
+      setPdfError("Kun PDF-filer er tilladt.");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setPdfError("Filen er for stor (max 10 MB).");
+      return;
+    }
+    setPdfFile(file);
+  };
+
+  // Simple comment: Drag-and-drop handlers on the textarea container
+  const onDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current += 1;
+    setIsDragging(true);
+  };
+
+  const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const onDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = Math.max(0, dragDepthRef.current - 1);
+    if (dragDepthRef.current === 0) setIsDragging(false);
+  };
+
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragDepthRef.current = 0;
+    setIsDragging(false);
+
+    const dt = e.dataTransfer;
+    const file = dt?.files?.[0];
+    trySetPdfFromFile(file);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-3xl">
-      <div className="relative">
+      {/* Simple comment: Textarea doubles as a drop zone for PDF */}
+      <div
+        className={`relative rounded-2xl shadow-lg border ${
+          isDragging ? "border-dashed border-[#009866] ring-4 ring-[#009866]/20" : "border-white"
+        } bg-white/90 backdrop-blur`}
+        onDragEnter={onDragEnter}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+      >
         <textarea
-          placeholder="Skriv dit pitch her..."
+          placeholder={pdfFile ? "PDF valgt – du kan stadig skrive ekstra noter her…" : "Skriv dit pitch her… eller træk en PDF hertil"}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="w-full min-h-[140px] p-4 pr-12 rounded-2xl bg-white/90 backdrop-blur text-[#111b21] placeholder-[#8e8e93] shadow-lg border border-white focus:outline-none focus:ring-4 focus:ring-[#009866]/20 focus:border-[#009866] resize-none"
-          rows={5}
+          className="w-full min-h-[160px] p-4 pr-12 rounded-2xl bg-transparent text-[#111b21] placeholder-[#8e8e93] focus:outline-none resize-none"
+          rows={6}
         />
+
+        {/* Simple comment: Field badge */}
         <span className="pointer-events-none absolute top-3 right-3 text-xs text-[#8e8e93] bg-white/70 px-2 py-0.5 rounded-full border border-white/80">
           🦁 Pitch
         </span>
+
+        {/* Simple comment: Selected PDF chip positioned inside field (bottom-left) */}
+        {pdfFile && (
+          <div className="absolute bottom-3 left-3 z-10 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#f0f2f5] border border-[#e9edef] text-[#111b21] text-sm shadow-sm">
+            <span className="inline-flex items-center justify-center w-6 h-6 rounded bg-[#dc2626] text-white text-[10px] font-bold">PDF</span>
+            <span className="max-w-[200px] truncate">{pdfFile.name}</span>
+            <span className="text-[#667781]">{Math.ceil(pdfFile.size / 1024)} KB</span>
+            <button
+              type="button"
+              onClick={() => setPdfFile(null)}
+              className="ml-1 inline-flex items-center justify-center w-6 h-6 rounded-md border border-[#e5e7eb] bg-white text-[#667781] hover:text-[#111b21] hover:bg-[#fafafa]"
+              aria-label="Fjern PDF"
+              title="Fjern PDF"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Simple comment: Drag overlay */}
+        {isDragging && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="px-4 py-2 rounded-xl bg-white/90 text-[#009866] text-sm font-medium border border-[#009866]/30 shadow-sm">
+              Slip PDF for at uploade
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Simple comment: PDF upload (optional) */}
-      <div className="space-y-2">
-        <label className="block text-sm text-[#667781]">Eller upload PDF (max 10 MB)</label>
-        <input
-          type="file"
-          accept="application/pdf"
-          onChange={(e) => {
-            setPdfError("");
-            const f = e.target.files?.[0] || null;
-            setPdfFile(f);
-          }}
-          className="block w-full text-sm text-[#111b21] file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border file:border-[#e5e7eb] file:text-sm file:font-medium file:bg-white file:text-[#111b21] hover:file:bg-[#f9fafb]"
-        />
-        {pdfFile && (
-          <div className="text-xs text-[#667781]">Valgt: {pdfFile.name} ({Math.ceil(pdfFile.size/1024)} KB)</div>
-        )}
-        {pdfError && (
-          <div className="text-xs text-red-600">{pdfError}</div>
-        )}
-      </div>
+      {/* Simple comment: Error text below the field */}
+      {pdfError && <div className="text-xs text-red-600">{pdfError}</div>}
 
       {/* Simple comment: Investor toggles - tight overlapping row */}
       <div className="relative z-10 mt-12 flex items-center justify-center gap-0 flex-nowrap overflow-visible px-1">
