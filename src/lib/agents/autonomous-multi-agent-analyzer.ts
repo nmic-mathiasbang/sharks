@@ -22,7 +22,7 @@ const ORCHESTRATOR_CONFIG = {
 const CONVERSATION_TIMING = {
   MAIN_RESPONSE_DELAY: { min: 100, max: 200 }, // 2-3 milliseconds
   FOLLOW_UP_DELAY: { min: 100, max: 200 }, // 1-3 milliseconds
-  FOLLOW_UP_CHANCE: 0.6 // 20% chance for follow-up responses
+  FOLLOW_UP_CHANCE: 0.9 // 90% chance for follow-up responses
 } as const;
 
 // Agent color configuration

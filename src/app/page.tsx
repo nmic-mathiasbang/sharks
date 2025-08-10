@@ -15,7 +15,6 @@ export default function Home() {
   const [toggledOff, setToggledOff] = useState<Record<string, boolean>>({});
   // Always use autonomous mode for Løvens Hule group chat
   const analysisMode = 'autonomous';
-  const maxTurns = 3;
   const allInvestors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm'];
 
   // Simple comment: Submit from StartPitchForm includes selected investors
@@ -45,7 +44,6 @@ export default function Home() {
         <SimplePitchChat 
           initialPitch={initialPitch} 
           analysisMode={analysisMode}
-          maxTurns={maxTurns}
           investors={selectedInvestors.length ? selectedInvestors : allInvestors}
         />
         

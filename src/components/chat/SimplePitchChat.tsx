@@ -19,7 +19,7 @@ interface SimplePitchChatProps {
 export function SimplePitchChat({ 
   initialPitch, 
   analysisMode = 'original', 
-  maxTurns = 6,
+  maxTurns = 18,
   investors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm']
 }: SimplePitchChatProps) {
   const [messages, setMessages] = useState<Message[]>([]);
