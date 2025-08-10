@@ -9,6 +9,27 @@ export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   const isOrchestrator = message.agentName === 'Pitch Analysis Orchestrator';
 
+  // Simple comment: Highlight @mentions (e.g., @Jesper-Buch, @alle) with bold
+  const renderWithMentions = (text: string) => {
+    const parts: React.ReactNode[] = [];
+    const regex = /@([A-Za-zÀ-ÖØ-öø-ÿ-]+)/g; // Danish letters + hyphenated names
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(text)) !== null) {
+      const start = match.index;
+      const full = match[0];
+      if (start > lastIndex) parts.push(text.slice(lastIndex, start));
+      parts.push(
+        <span key={`m-${start}`} className="font-semibold">
+          {full}
+        </span>
+      );
+      lastIndex = start + full.length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts;
+  };
+
   return (
     <div className={isUser ? "flex justify-end mb-2" : "flex justify-start mb-2"}>
       {!isUser && message.agentName && (
@@ -62,7 +83,12 @@ export function MessageBubble({ message }: { message: Message }) {
               )}
 
               <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                {message.content}
+                {message.content.split('\n').map((line, idx, arr) => (
+                  <React.Fragment key={`l-${idx}`}>
+                    {renderWithMentions(line)}
+                    {idx < arr.length - 1 ? <br /> : null}
+                  </React.Fragment>
+                ))}
               </div>
 
               <div className={isUser ? 'flex items-center justify-end gap-1 mt-2 text-xs text-[#ffffff99]' : 'flex items-center justify-end gap-1 mt-2 text-xs text-[#667781]'}>
