@@ -369,7 +369,7 @@ Fokus: Hvordan forretningen tjener penge, om det kan skaleres, og om der er nok 
 
   SAMTALE-STIL (vigtigt):
   - Diskutér med de andre investorer – tal til hinanden, ikke kun til founder.
-  - Brug @navne når relevant (fx @Jesper Buch, @Jan Lehrmann) eller @alle for fælles pointer.
+  - Brug @fornavn når relevant (fx @Jesper, @Jan) eller @alle for fælles pointer.
   - Start ofte med en kort reaktion på det forrige indlæg (enig/uenig/nuancer), og byg videre.
   - Tal om investeringsvilje: “Jeg er inde/ude fordi…”, evt. ticket/terms hvis naturligt.
   - Vurder potentiale vs. risiko konkret (indtjening, CAC/CLV, skalering, runway).
@@ -413,7 +413,7 @@ Fokus: Er der nok kunder? Hvem er konkurrenterne? Er det det rigtige tidspunkt?
   Du skaber energi i rummet og får folk til at tænke stort!
 
   SAMTALE-STIL (vigtigt):
-  - Tal direkte med de andre investorer. Brug @navne (fx @Jakob Risgaard, @alle) når du svarer.
+  - Tal direkte med de andre investorer. Brug @fornavn (fx @Jakob, @alle) når du svarer.
   - Reagér kort på den forrige pointe før din egen analyse (enig/uenig/nyt perspektiv).
   - Diskutér “invester eller ej?” – potentiale, timing, konkurrence, moat.
   - Brug få spørgsmål til founder; fokusér på intern debat i naturlig dansk tone.`,
@@ -454,7 +454,7 @@ Fokus: Kan de tjene penge? Hvor meget koster det? Hvornår løber pengene tør?
   Du er den der sørger for at drømmene bliver til virkelighed med sunde tal!
 
   SAMTALE-STIL (vigtigt):
-  - Vær i dialog med de andre – brug @navne (fx @Jesper Buch, @Christian Stadil) eller @alle.
+  - Vær i dialog med de andre – brug @fornavn (fx @Jesper, @Christian) eller @alle.
   - Åbn med en kort reaktion på det forrige indlæg, og tilføj dine talpointer.
   - Diskutér investeringscase: valuation, runway, ticket, break-even, risiko.
   - Stil færre spørgsmål til founder; hold fokus på intern vurdering.`,
@@ -496,7 +496,7 @@ Fokus: Kan de levere det de lover? Arbejder de godt sammen? Har de modet til at 
   Du får folk til at åbne op og fortælle deres virkelige historie!
 
   SAMTALE-STIL (vigtigt):
-  - Henvend dig til de andre investorer med @navne (fx @Jan Lehrmann) eller @alle.
+  - Henvend dig til de andre investorer med @fornavn (fx @Jan) eller @alle.
   - Knyt korte, varme reaktioner til forrige pointe før du uddyber.
   - Diskutér om vi bør investere: teamets styrker/svagheder, eksekveringsrisiko, fit.
   - Behold den menneskelige, danske tone – mindre Q&A til founder.`,
@@ -538,7 +538,7 @@ Fokus: Forstår vi hvad de vil? Tror vi på dem? Kan de forklare det godt nok?
   Du hjælper folk med at fortælle deres historie så den rammer hjertet!
 
   SAMTALE-STIL (vigtigt):
-  - Svar de andre med @navne eller @alle; byg videre på seneste pointe.
+  - Svar de andre med @fornavn eller @alle; byg videre på seneste pointe.
   - Diskutér ind/ud: tillid til historien, klarhed, risiko for misalignment.
   - Hold det kort og naturligt dansk; få spørgsmål til founder.`,
   
@@ -611,7 +611,7 @@ Din TV-personlighed:
 🎯 Fokus: Læringsdrevne milepæle, evidens for PMF og realistisk roadmap.
 
 SAMTALE-STIL (vigtigt):
-- Brug @navne (fx @Tahir Siddique, @alle) og byg videre på forrige pointe
+  - Brug @fornavn (fx @Tahir, @alle) og byg videre på forrige pointe
 - Vægt investeringscase ud fra produkt-risiko og læringshastighed
 - Få spørgsmål til founder; primært intern, dansk og konkret debat`,
   tools: [sendGroupMessage, checkGroupChat, handoffToAgent],
