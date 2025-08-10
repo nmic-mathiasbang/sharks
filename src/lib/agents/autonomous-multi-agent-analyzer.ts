@@ -213,6 +213,29 @@ function getResponseLengthGuidance(agentName: string, discussionState: Autonomou
   }
 }
 
+// Simple comment: Randomized guidance to vary when @fornavn or @alle is used
+function getMentionGuidance(agentName: string, discussionState: AutonomousDiscussionState): string {
+  const recent = discussionState.groupChat.slice(-4);
+  // Prefer the most recent other speaker as potential mention target
+  const otherSpeakers = recent
+    .map(m => m.sender)
+    .filter(n => n && n !== agentName);
+  const targetFullName = otherSpeakers.length > 0 ? otherSpeakers[otherSpeakers.length - 1] : '';
+  const targetFirstName = targetFullName ? targetFullName.split(' ')[0] : '';
+
+  const r = Math.random();
+  // ~45% encourage @fornavn when replying to someone specific
+  if (targetFirstName && r < 0.45) {
+    return `Hvis det falder naturligt, kan du kort svare ${targetFirstName} ved at starte med @${targetFirstName}. Ellers undlad @ denne gang.`;
+  }
+  // ~20% encourage a group-level mention
+  if (r < 0.65) {
+    return `Hvis din pointe er til hele panelet, kan du bruge @alle – men kun hvis det føles naturligt. Ellers skriv uden @.`;
+  }
+  // ~35% explicitly suggest no mention
+  return `Skriv din reaktion uden @‑mention denne gang, og hold det naturligt.`;
+}
+
 // Real OpenAI Agent response function using Runner streaming
 // Simple comment: Run the agent with streaming and collect text output while preserving our event model
 async function getRealAgentResponse(agent: Agent, prompt: string, discussionState: AutonomousDiscussionState): Promise<string> {
@@ -224,12 +247,14 @@ async function getRealAgentResponse(agent: Agent, prompt: string, discussionStat
   
   // Add response length guidance based on context
   const lengthGuidance = getResponseLengthGuidance(agent.name, discussionState);
+  const mentionGuidance = getMentionGuidance(agent.name, discussionState);
   
   const contextualPrompt = `${conversationContext}You are participating in a live investment panel discussion about this pitch:
 
 "${discussionState.pitch.substring(0, 500)}..."
 
 ${lengthGuidance}
+\n${mentionGuidance}
 
 Your response should feel natural and conversational, like you're really discussing with colleagues. Vary your response length based on the situation:
 - Sometimes keep it brief (1-5 words): "Enig!", "Det bekymrer mig", "Præcis!"
