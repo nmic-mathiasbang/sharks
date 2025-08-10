@@ -2,34 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const runtime = 'nodejs';
 
-// Simple comment: Try pdf-parse first, then fallback to pdfjs-dist text extraction
+// Simple comment: Extract text from PDF using pdf-parse library
 async function parsePdf(buffer: Buffer): Promise<{ text: string; numPages?: number }> {
-  try {
-    const mod: any = await import('pdf-parse');
-    const pdfParse = (mod?.default || mod) as (buf: Buffer) => Promise<any>;
-    const res = await pdfParse(buffer);
-    const pages = res.numpages ?? res.numPages;
-    return { text: res.text || '', numPages: pages };
-  } catch (err) {
-    // Fallback to pdfjs-dist
-    // Import ESM build and treat as any to avoid TS type resolution issues in API route
-    const pdfjs: any = await import('pdfjs-dist/build/pdf.mjs');
-    // In Node, disable worker to avoid bundling errors
-    if (pdfjs?.GlobalWorkerOptions) {
-      pdfjs.GlobalWorkerOptions.workerSrc = undefined as any;
-    }
-    const loadingTask = pdfjs.getDocument({ data: buffer, useWorkerFetch: false, isEvalSupported: false, disableFontFace: true });
-    const pdf = await loadingTask.promise;
-    const numPages = pdf.numPages;
-    let text = '';
-    for (let i = 1; i <= numPages; i++) {
-      const page = await pdf.getPage(i);
-      const content = await page.getTextContent();
-      const pageText = content.items.map((it: any) => it.str).join(' ');
-      text += pageText + '\n\n';
-    }
-    return { text, numPages };
-  }
+  const pdfParse = require('pdf-parse');
+  const result = await pdfParse(buffer);
+  return { text: result.text, numPages: result.numpages };
 }
 
 export async function POST(req: NextRequest) {
