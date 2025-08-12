@@ -105,7 +105,7 @@ function StackedBubbleTransition({ oldText, newText, side = 'right' }: { oldText
 function FloatingItem({ name, top, left, text, stackedTexts, delay = 0, show = false, showStack = false, side = 'right' }: { name: string; top: string; left: string; text?: string; stackedTexts?: [string, string]; delay?: number; show?: boolean; showStack?: boolean; side?: 'left' | 'right' }) {
   return (
     <div
-      className="absolute transition-transform animate-avatar-in"
+      className="floating-investor absolute transition-transform animate-avatar-in"
       style={{ top, left, animationDelay: `${delay}s` }}
     >
       <div className="relative inline-flex items-center" style={{ animation: `floatY 6s ease-in-out ${delay}s infinite alternate` }}>
@@ -126,7 +126,17 @@ function FloatingItem({ name, top, left, text, stackedTexts, delay = 0, show = f
 }
 
 // Simple comment: Full-screen floating investors layer (decorative); reacts to hoveredName and persistent toggledOff state
-export function FloatingInvestors({ hoveredName, toggledOff }: { hoveredName?: string | null; toggledOff?: Record<string, boolean> }) {
+export function FloatingInvestors({ 
+  hoveredName, 
+  toggledOff, 
+  fadeOut, 
+  onFadeComplete 
+}: { 
+  hoveredName?: string | null; 
+  toggledOff?: Record<string, boolean>;
+  fadeOut?: boolean;
+  onFadeComplete?: () => void;
+}) {
   // Simple comment: Static layout positions and example texts
   const items: Array<{ name: string; top: string; left: string; text?: string; delay?: number; side?: 'left' | 'right' }> = [
     { name: 'Jesper Buch', top: '10%', left: '68%', text: 'Vis mig, at I sparker røv. 🤘🏼', delay: 0.2, side: 'right' },
@@ -144,6 +154,8 @@ export function FloatingInvestors({ hoveredName, toggledOff }: { hoveredName?: s
   // Simple comment: Track recent OFF transitions to play stacked animation once
   const [recentlyExited, setRecentlyExited] = useState<Record<string, boolean>>({});
   const prevOffRef = useRef<Record<string, boolean>>({});
+  const containerRef = useRef<HTMLDivElement>(null);
+  const fadeTimelineRef = useRef<gsap.core.Timeline | null>(null);
 
   useLayoutEffect(() => {
     if (!toggledOff) return;
@@ -168,8 +180,50 @@ export function FloatingInvestors({ hoveredName, toggledOff }: { hoveredName?: s
     }
   }, [toggledOff]);
 
+  // Simple comment: Handle staggered fade-out animation when fadeOut prop changes
+  useLayoutEffect(() => {
+    if (!fadeOut || !containerRef.current) return;
+    
+    // Simple comment: Kill any existing timeline
+    if (fadeTimelineRef.current) {
+      fadeTimelineRef.current.kill();
+    }
+    
+    const investorElements = containerRef.current.querySelectorAll('.floating-investor');
+    
+    // Simple comment: Create staggered fade-out timeline
+    fadeTimelineRef.current = gsap.timeline({
+      onComplete: () => {
+        onFadeComplete?.();
+      }
+    });
+    
+    // Simple comment: Stagger the fade-out from random starting points for natural effect
+    fadeTimelineRef.current.to(investorElements, {
+      opacity: 0,
+      y: -20,
+      scale: 0.9,
+      duration: 0.4,
+      ease: "power2.inOut",
+      stagger: {
+        amount: 0.3, // Total stagger duration
+        from: "random" // Random stagger order for organic feel
+      }
+    });
+    
+  }, [fadeOut, onFadeComplete]);
+
+  // Simple comment: Cleanup timeline on unmount
+  useLayoutEffect(() => {
+    return () => {
+      if (fadeTimelineRef.current) {
+        fadeTimelineRef.current.kill();
+      }
+    };
+  }, []);
+
   return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden select-none">
+    <div ref={containerRef} className="pointer-events-none absolute inset-0 overflow-hidden select-none">
       {items.map((it) => {
         // Simple comment: If toggled OFF, show exit text; on first transition, stack with old text
         const isOff = Boolean(toggledOff && toggledOff[it.name]);

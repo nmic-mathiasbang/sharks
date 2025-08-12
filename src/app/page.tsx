@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { SimplePitchChat } from "@/components/chat/SimplePitchChat";
 import { StartPitchForm } from "@/components/chat/StartPitchForm";
 import { FloatingInvestors } from "@/components/chat/FloatingInvestors";
 import { PdfAttachment } from "@/components/chat/types";
+import { gsap } from "gsap";
 
 export default function Home() {
   // State to manage the input value and chat
@@ -15,35 +16,104 @@ export default function Home() {
   const [hoveredInvestor, setHoveredInvestor] = useState<string | null>(null);
   // Simple comment: Track which investors are toggled OFF (persist their exit bubble)
   const [toggledOff, setToggledOff] = useState<Record<string, boolean>>({});
+  // Simple comment: Control floating investors fade-out animation
+  const [fadeOutInvestors, setFadeOutInvestors] = useState(false);
+  
+  // Simple comment: GSAP refs for smooth animations
+  const formRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const timelineRef = useRef<gsap.core.Timeline | null>(null);
   // Always use autonomous mode for Løvens Hule group chat
   const analysisMode = 'autonomous';
   const allInvestors = ['Jakob Risgaard', 'Jesper Buch', 'Jan Lehrmann', 'Christian Stadil', 'Tahir Siddique', 'Christian Arnstedt', 'Louise Herping Ellegaard', 'Anne Stampe Olesen', 'Morten Larsen', 'Nikolaj Nyholm'];
 
-  // Simple comment: Submit from StartPitchForm includes selected investors and optional PDF attachment
+  // Simple comment: Submit from StartPitchForm with smooth GSAP transition
   const handleSubmit = (pitch: string, investors: string[], pdf?: PdfAttachment) => {
     setInitialPitch(pitch);
     setSelectedInvestors(investors);
     setPdfAttachment(pdf);
-    setShowChat(true);
+    
+    // Simple comment: Start with floating investors fade-out
+    setFadeOutInvestors(true);
+  };
+
+  // Simple comment: Called when floating investors fade-out completes
+  const handleInvestorsFadeComplete = () => {
+    // Simple comment: Create smooth GSAP timeline for form->chat transition
+    timelineRef.current = gsap.timeline({
+      onComplete: () => {
+        setShowChat(true);
+      }
+    });
+    
+    // Simple comment: Fade out form content after investors
+    timelineRef.current.to(formRef.current, {
+      opacity: 0,
+      y: -20,
+      scale: 0.98,
+      duration: 0.5,
+      ease: "power2.inOut"
+    });
   };
   // Simple comment: Persist OFF state until toggled back ON
   const handleToggleInvestor = (name: string, selected: boolean) => {
     setToggledOff((prev) => ({ ...prev, [name]: !selected }));
   };
 
-  // Handle starting over
+  // Simple comment: Handle starting over with GSAP fade-out
   const handleStartOver = () => {
-    setShowChat(false);
-    setInitialPitch("");
-    setSelectedInvestors([]);
-    setPdfAttachment(undefined);
+    // Simple comment: Fade out chat, then reset state
+    gsap.to(chatRef.current, {
+      opacity: 0,
+      y: 30,
+      scale: 0.95,
+      duration: 0.3,
+      ease: "power2.inOut",
+      onComplete: () => {
+        setShowChat(false);
+        setInitialPitch("");
+        setSelectedInvestors([]);
+        setPdfAttachment(undefined);
+        setFadeOutInvestors(false);
+        
+        // Simple comment: Reset form opacity for next time
+        if (formRef.current) {
+          gsap.set(formRef.current, { opacity: 1, y: 0, scale: 1 });
+        }
+      }
+    });
   };
 
 
 
+  // Simple comment: When chat mounts, animate it in with GSAP
+  useEffect(() => {
+    if (showChat && chatRef.current) {
+      // Simple comment: Set initial state and animate in
+      gsap.set(chatRef.current, { opacity: 0, y: 30, scale: 0.95 });
+      gsap.to(chatRef.current, {
+        opacity: 1,
+        y: 0,
+        scale: 1,
+        duration: 0.5,
+        ease: "power2.out",
+        delay: 0.1
+      });
+    }
+  }, [showChat]);
+
+  // Simple comment: Cleanup GSAP timeline on unmount
+  useEffect(() => {
+    return () => {
+      if (timelineRef.current) {
+        timelineRef.current.kill();
+      }
+    };
+  }, []);
+
   if (showChat) {
     return (
-      <div className="h-screen w-screen overflow-hidden">
+      <div ref={chatRef} className="h-screen w-screen overflow-hidden">
         {/* Full screen WhatsApp-style chat interface */}
         <SimplePitchChat 
           initialPitch={initialPitch} 
@@ -94,10 +164,15 @@ export default function Home() {
     <div className="relative min-h-screen flex flex-col items-center justify-center p-8 overflow-visible" style={{ backgroundColor: '#fcf5eb' }}>
       {/* Simple comment: Decorative floating investors */}
       {/* Simple comment: Pass hovered investor and OFF-state to control bubbles */}
-      <FloatingInvestors hoveredName={hoveredInvestor} toggledOff={toggledOff} />
-      <main className="relative z-10 w-full flex flex-col items-center space-y-6">
+      <FloatingInvestors 
+        hoveredName={hoveredInvestor} 
+        toggledOff={toggledOff}
+        fadeOut={fadeOutInvestors}
+        onFadeComplete={handleInvestorsFadeComplete}
+      />
+      <main ref={formRef} className="relative z-10 w-full flex flex-col items-center space-y-6">
         <h1 className="text-center text-5xl sm:text-6xl font-extrabold tracking-tight text-black">
-        Tænk hvis din pitch blev kastet for løverne!
+        Tænk hvis din pitchdeck blev kastet for løverne!
         </h1>
         <div className="text-center">
         </div>
