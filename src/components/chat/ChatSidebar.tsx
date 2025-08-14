@@ -19,12 +19,12 @@ export function ChatSidebar({ activeTypers = new Set<string>(), lastPreview, inv
     timestamp?: number; // used for initial ordering
   }> = [
     { name: 'Kwadwo P. Swiatecki Adu', lastMessage: 'Er du ved at være klar til hackathon?🤘🏼', time: '09.35', hasUnread: false },
-    { name: 'Frederik 10.', lastMessage: 'Hvad siger du til Frederikshvile projektet?🤔', time: '06.47', hasUnread: false },
-    { name: 'Christian Stadil', lastMessage: 'Og af den grund er jeg ude!', time: 'Mandag', hasUnread: false },
-    { name: 'Caroline Stage Olsen', lastMessage: 'Hvad skal Danmarks nye app hedde? 📱', time: 'Mandag', hasUnread: false },
-    { name: 'Magnus Thorslund', lastMessage: 'Gir du tapas, hvis jeg kommer på besøg?', time: 'Lørdag', hasUnread: false },
-    { name: 'Fabrizio Romano', lastMessage: 'To stay in Barcelona - Here we go!💯🇪🇸', time: 'fredag', hasUnread: false },
-    { name: 'Mor ❤️', lastMessage: 'Hej skatter, hvordan går det med dig?🥰', time: 'Fredag', hasUnread: false, isMuted: true },
+    { name: 'Frederik 10.', lastMessage: 'Hvad siger du til Frederikshvile projektet?🤔', time: 'Onsdag', hasUnread: false },
+    { name: 'Caroline Stage Olsen', lastMessage: 'Hvad skal Danmarks nye app hedde? 📱', time: 'Onsdag', hasUnread: false },
+    { name: 'Christian Stadil', lastMessage: 'Og af den grund er jeg ude!', time: 'tirsdag', hasUnread: false },
+    { name: 'Magnus Thorslund', lastMessage: 'Gir du tapas, hvis jeg kommer på besøg?', time: 'Søndag', hasUnread: false },
+    { name: 'Fabrizio Romano', lastMessage: 'To stay in Barcelona - Here we go!💯🇪🇸', time: 'Lørdag', hasUnread: false },
+    { name: 'Mor ❤️', lastMessage: 'Hej skatter, hvordan går det med dig?🥰', time: 'Lørdag', hasUnread: false, isMuted: false },
     { name: 'Sam Altman', lastMessage: 'Do you want pre-access for GPT-6?🤖💸', time: '08.08.2025', hasUnread: false },
     { name: 'Mark Zuckerberg', lastMessage: 'Last offer: 300M$💸', time: '05.08.2025', hasUnread: false },
     // Place Jeppe at the bottom initially
@@ -48,7 +48,7 @@ export function ChatSidebar({ activeTypers = new Set<string>(), lastPreview, inv
       setContactsState(prev => {
         const idx = prev.findIndex(c => c.name === 'Jeppe Hamming');
         if (idx === -1) return prev;
-        const updated = { ...prev[idx], lastMessage: 'Er du klar til vores webinar næste uge?', time: '10.30', hasUnread: true, highlight: true };
+        const updated = { ...prev[idx], lastMessage: 'Er du klar til vores webinar næste uge?', time: '14.15', hasUnread: true, highlight: true };
         const others = prev.filter((_, i) => i !== idx);
         const next = [updated, ...others];
 
@@ -73,58 +73,7 @@ export function ChatSidebar({ activeTypers = new Set<string>(), lastPreview, inv
     };
   }, []);
 
-  // Initialize and order contact times: top is today 09.35, others go backwards randomly in correct order
-  useEffect(() => {
-    if (timesInitializedRef.current) return;
-    timesInitializedRef.current = true;
 
-    const now = new Date();
-    const base = new Date(now);
-    base.setHours(9, 35, 0, 0);
-
-    // Helper to format a timestamp into sidebar label
-    const formatTimeLabel = (d: Date) => {
-      const sameDay = d.toDateString() === now.toDateString();
-      if (sameDay) {
-        const hh = String(d.getHours()).padStart(2, '0');
-        const mm = String(d.getMinutes()).padStart(2, '0');
-        return `${hh}.${mm}`;
-      }
-      // For dates within the last 6 days, show weekday (Danish)
-      const msInDay = 24 * 60 * 60 * 1000;
-      const diffDays = Math.floor((now.getTime() - d.getTime()) / msInDay);
-      const weekdays = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
-      if (diffDays > 0 && diffDays < 6) {
-        return weekdays[d.getDay()];
-      }
-      // Else show date dd.MM.yyyy
-      const dd = String(d.getDate()).padStart(2, '0');
-      const MM = String(d.getMonth() + 1).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      return `${dd}.${MM}.${yyyy}`;
-    };
-
-    setContactsState(prev => {
-      // Build timestamps: Kwadwo fixed at base; others random earlier
-      const withTs = prev.map(c => {
-        if (c.name.startsWith('Kwadwo')) {
-          return { ...c, timestamp: base.getTime(), time: formatTimeLabel(base) };
-        }
-        // random within 1..7 days earlier, random hour/minute
-        const daysEarlier = 1 + Math.floor(Math.random() * 7);
-        const randHour = Math.floor(Math.random() * 24);
-        const randMin = Math.floor(Math.random() * 60);
-        const d = new Date(base);
-        d.setDate(base.getDate() - daysEarlier);
-        d.setHours(randHour, randMin, 0, 0);
-        return { ...c, timestamp: d.getTime(), time: formatTimeLabel(d) };
-      });
-
-      // Sort descending by timestamp so Kwadwo is top (ties handled naturally)
-      const sorted = withTs.sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
-      return sorted;
-    });
-  }, []);
   
   // Helper to map contact names to image files
   const getContactImage = (name: string) => {

@@ -101,12 +101,14 @@ async function* processAgentResponse(
   discussionState: AutonomousDiscussionState,
   delayConfig: { min: number; max: number } = CONVERSATION_TIMING.MAIN_RESPONSE_DELAY
 ): AsyncGenerator<{
-  type: 'agent_typing_start' | 'agent_typing_stop' | 'agent_message' | 'agent_error';
+  type: 'agent_typing_start' | 'agent_typing_stop' | 'agent_message' | 'agent_error' | 'final_investment_decision';
   agent: string;
   message?: string;
   turn: number;
   colors: { background: string; text: string };
   error?: string;
+  decision?: FinalInvestmentDecision;
+  remainingDecisions?: number;
 }> {
   
   // Start typing indicator
@@ -126,17 +128,56 @@ async function* processAgentResponse(
     // Simple comment: We stop typing right before emitting the final message
     const response = await getRealAgentResponse(agent, prompt, discussionState);
 
-    // Create and store group message
-    const groupMessage: GroupMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      sender: agent.name,
-      message: response,
-      timestamp: new Date(),
-      turn: discussionState.currentTurn,
-      needsResponse: response.includes('?') || response.includes('thoughts?') || response.includes('agree?')
-    };
+    // Check if this is a final decision and parse it
+    let finalDecision: FinalInvestmentDecision | null = null;
+    if (discussionState.finalDecisionPhase) {
+      finalDecision = parseFinalDecision(agent.name, response);
 
-    discussionState.groupChat.push(groupMessage);
+      // Simple comment: If model failed to produce a final response, create a safe PASS fallback
+      const lowerResp = response.toLowerCase();
+      const noFinalProduced = !finalDecision && (
+        response.trim() === '' ||
+        lowerResp.includes('model did not produce a final response') ||
+        lowerResp.includes('is analyzing the pitch... (error:')
+      );
+
+      if (noFinalProduced) {
+        const fallbackMessage = `Jeg kan ikke afgive et detaljeret svar lige nu. På den baggrund og den nuværende usikkerhed er min beslutning: og af den grund er jeg ude.`;
+        finalDecision = {
+          agentName: agent.name,
+          decision: 'PASS',
+          reasoning: fallbackMessage.replace(/og af den grund er jeg ude.?/i, '').trim(),
+          timestamp: new Date()
+        };
+      }
+
+      if (finalDecision) {
+        discussionState.finalDecisions.set(agent.name, finalDecision);
+        discussionState.agentsWhoMadeFinalDecision.add(agent.name);
+      }
+    }
+
+    // In final decision phase, suppress transient model error messages that are not actual decisions
+    const lowerResponse = response.toLowerCase();
+    const suppressDuringFinalPhase = discussionState.finalDecisionPhase 
+      && !finalDecision 
+      && (lowerResponse.includes('is analyzing the pitch... (error:') || lowerResponse.includes('model did not produce a final response'));
+
+    // Create and store group message (unless suppressed)
+    if (!suppressDuringFinalPhase) {
+      const groupMessage: GroupMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        sender: agent.name,
+        message: response,
+        timestamp: new Date(),
+        turn: discussionState.currentTurn,
+        needsResponse: !discussionState.finalDecisionPhase && (response.includes('?') || response.includes('thoughts?') || response.includes('agree?')),
+        isFinalDecision: discussionState.finalDecisionPhase,
+        finalDecision: finalDecision || undefined
+      };
+
+      discussionState.groupChat.push(groupMessage);
+    }
 
     // Stop typing indicator
     yield {
@@ -146,14 +187,27 @@ async function* processAgentResponse(
       colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
     };
 
-    // Yield the message
-    yield {
-      type: 'agent_message',
-      agent: agent.name,
-      message: response,
-      turn: discussionState.currentTurn,
-      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
-    };
+    // Yield final decision event if this was a final decision
+    if (finalDecision) {
+      yield {
+        type: 'final_investment_decision',
+        agent: agent.name,
+        message: response,
+        turn: discussionState.currentTurn,
+        colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS],
+        decision: finalDecision,
+        remainingDecisions: discussionState.totalActiveAgentsCount - discussionState.agentsWhoMadeFinalDecision.size
+      };
+    } else if (!suppressDuringFinalPhase) {
+      // Yield regular message
+      yield {
+        type: 'agent_message',
+        agent: agent.name,
+        message: response,
+        turn: discussionState.currentTurn,
+        colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
+      };
+    }
 
   } catch (error) {
     console.error(`Error with ${agent.name}:`, error);
@@ -166,14 +220,52 @@ async function* processAgentResponse(
       colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS]
     };
 
-    yield {
-      type: 'agent_error',
-      agent: agent.name,
-      message: 'Sorry, I encountered an error in the discussion. Continuing...',
-      turn: discussionState.currentTurn,
-      colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS],
-      error: error instanceof Error ? error.message : 'Unknown error'
-    };
+    // Simple comment: During final decision phase, convert model errors to a safe PASS decision instead of error events
+    if (discussionState.finalDecisionPhase) {
+      const fallbackText = 'Der var et teknisk udfald. Jeg kan ikke afgive et detaljeret svar nu, og af den grund er jeg ude.';
+      const finalDecision: FinalInvestmentDecision = {
+        agentName: agent.name,
+        decision: 'PASS',
+        reasoning: fallbackText.replace(/og af den grund er jeg ude.?/i, '').trim(),
+        timestamp: new Date(),
+      };
+
+      discussionState.finalDecisions.set(agent.name, finalDecision);
+      discussionState.agentsWhoMadeFinalDecision.add(agent.name);
+
+      // Record the final decision message in the chat for completeness
+      const groupMessage: GroupMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        sender: agent.name,
+        message: fallbackText,
+        timestamp: new Date(),
+        turn: discussionState.currentTurn,
+        needsResponse: false,
+        isFinalDecision: true,
+        finalDecision
+      };
+      discussionState.groupChat.push(groupMessage);
+
+      // Yield the final investment decision event so UI progresses cleanly
+      yield {
+        type: 'final_investment_decision',
+        agent: agent.name,
+        message: fallbackText,
+        turn: discussionState.currentTurn,
+        colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS],
+        decision: finalDecision,
+        remainingDecisions: discussionState.totalActiveAgentsCount - discussionState.agentsWhoMadeFinalDecision.size
+      };
+    } else {
+      yield {
+        type: 'agent_error',
+        agent: agent.name,
+        message: 'Sorry, I encountered an error in the discussion. Continuing...',
+        turn: discussionState.currentTurn,
+        colors: AGENT_COLORS[agent.name as keyof typeof AGENT_COLORS],
+        error: error instanceof Error ? error.message : 'Unknown error'
+      };
+    }
   }
 }
 
@@ -213,6 +305,91 @@ function getResponseLengthGuidance(agentName: string, discussionState: Autonomou
   }
 }
 
+// Simple comment: Helper function to detect Jakob/Jesper banter opportunities
+function getJakobJesperBanterGuidance(agentName: string, discussionState: AutonomousDiscussionState): string {
+  const recentMessages = discussionState.groupChat.slice(-4);
+  const jakobPresent = discussionState.activeAgents.includes('Jakob Risgaard');
+  const jesperPresent = discussionState.activeAgents.includes('Jesper Buch');
+  
+  // Only add banter guidance if both are present
+  if (!jakobPresent || !jesperPresent) return '';
+  
+  const jakobRecentlySpoke = recentMessages.some(msg => msg.sender === 'Jakob Risgaard');
+  const jesperRecentlySpoke = recentMessages.some(msg => msg.sender === 'Jesper Buch');
+  
+  if (agentName === 'Jakob Risgaard' && jesperRecentlySpoke) {
+    const banterChance = Math.random();
+    if (banterChance < 0.35) { // 35% chance for banter
+      return `\n🎭 BANTER MOMENT: Jesper har lige sagt noget - måske en lille venlig stikpille? Han bliver altid så teoretisk og international. Du kan prikke lidt til ham med dansk jordnærhed eller bare rulle øjnene over hans "store visioner". Gør det med et smil! 😏`;
+    }
+  }
+  
+  if (agentName === 'Jesper Buch' && jakobRecentlySpoke) {
+    const banterChance = Math.random();
+    if (banterChance < 0.35) { // 35% chance for banter
+      return `\n🎭 BANTER MOMENT: Jakob har lige været skeptisk igen - perfekt til at prikke til ham! Han er altid så forsigtig og jordnær. Du kan drille ham med hans "hverdagseksempler" eller hans pessimisme. Gør det venligt og charmerende! 😄`;
+    }
+  }
+  
+  return '';
+}
+
+// Simple comment: Determine when to enter final decision phase
+function shouldEnterFinalDecisionPhase(discussionState: AutonomousDiscussionState): boolean {
+  const turnsRemaining = discussionState.maxTurns - discussionState.currentTurn;
+  const agentsCount = discussionState.totalActiveAgentsCount;
+  
+  // Enter final phase when we have exactly enough turns for each agent to make final decision
+  return turnsRemaining <= agentsCount && !discussionState.finalDecisionPhase;
+}
+
+// Simple comment: Check if all agents have made their final investment decisions
+function allAgentsMadeFinalDecision(discussionState: AutonomousDiscussionState): boolean {
+  return discussionState.agentsWhoMadeFinalDecision.size === discussionState.totalActiveAgentsCount;
+}
+
+// Simple comment: Parse final investment decision from agent response
+function parseFinalDecision(agentName: string, response: string): FinalInvestmentDecision | null {
+  const lowerResponse = response.toLowerCase();
+  
+  // Check for rejection pattern: "og af den grund er jeg ude"
+  if (lowerResponse.includes('og af den grund er jeg ude')) {
+    return {
+      agentName,
+      decision: 'PASS',
+      reasoning: response.substring(0, response.toLowerCase().indexOf('og af den grund er jeg ude')).trim(),
+      timestamp: new Date()
+    };
+  }
+  
+  // Check for investment pattern: "jeg tilbyder X% for Y kr"
+  const investmentMatch = response.match(/jeg tilbyder (\d+)%.*?(\d+(?:\.\d+)?(?:\.000)*)\s*kr/i);
+  if (investmentMatch) {
+    const equity = parseInt(investmentMatch[1]);
+    const amountStr = investmentMatch[2].replace(/\./g, '').replace(',', '.');
+    const amount = parseFloat(amountStr) * (amountStr.includes('.000') ? 1 : 1000); // Convert to full amount
+    
+    // Extract value proposition (everything after the investment offer)
+    const valuePropositionStart = response.toLowerCase().indexOf('kan jeg hjælpe');
+    const valueProposition = valuePropositionStart >= 0 
+      ? response.substring(valuePropositionStart).trim()
+      : response.substring(response.indexOf('.') + 1).trim();
+    
+    return {
+      agentName,
+      decision: 'INVEST',
+      equity,
+      amount,
+      reasoning: response,
+      valueProposition,
+      timestamp: new Date()
+    };
+  }
+  
+  // If no clear pattern, treat as incomplete - agent needs to follow format
+  return null;
+}
+
 // Simple comment: Randomized guidance to vary when @fornavn or @alle is used
 function getMentionGuidance(agentName: string, discussionState: AutonomousDiscussionState): string {
   const recent = discussionState.groupChat.slice(-4);
@@ -239,31 +416,9 @@ function getMentionGuidance(agentName: string, discussionState: AutonomousDiscus
 // Real OpenAI Agent response function using Runner streaming
 // Simple comment: Run the agent with streaming and collect text output while preserving our event model
 async function getRealAgentResponse(agent: Agent, prompt: string, discussionState: AutonomousDiscussionState): Promise<string> {
-  // Build dynamic context-aware prompt
-  const recentMessages = discussionState.groupChat.slice(-5);
-  const conversationContext = recentMessages.length > 0 
-    ? `Recent group discussion:\n${recentMessages.map(m => `${m.sender}: ${m.message}`).join('\n')}\n\n`
-    : '';
-  
-  // Add response length guidance based on context
-  const lengthGuidance = getResponseLengthGuidance(agent.name, discussionState);
-  const mentionGuidance = getMentionGuidance(agent.name, discussionState);
-  
-  const contextualPrompt = `${conversationContext}You are participating in a live investment panel discussion about this pitch:
-
-"${discussionState.pitch.substring(0, 500)}..."
-
-${lengthGuidance}
-\n${mentionGuidance}
-
-Your response should feel natural and conversational, like you're really discussing with colleagues. Vary your response length based on the situation:
-- Sometimes keep it brief (1-5 words): "Enig!", "Det bekymrer mig", "Præcis!"
-- Sometimes moderate (1-2 sentences): Standard reactions and questions
-- Sometimes detailed (3-5 sentences): When you need to elaborate or analyze deeply
-
-Use your personality and expertise. Reference other agents naturally when relevant.
-
-Current discussion context: This is turn ${discussionState.currentTurn} of the discussion.`;
+  // For direct prompts (like orchestrator synthesis), use the prompt as-is
+  // For regular discussion, the prompt should already be contextual from createContextualPrompt
+  const contextualPrompt = prompt;
 
   try {
     // Simple comment: Execute with SDK streaming, providing context so tools can read state if needed
@@ -284,6 +439,17 @@ Current discussion context: This is turn ${discussionState.currentTurn} of the d
   }
 }
 
+// Simple comment: Interface for final investment decisions from each agent
+interface FinalInvestmentDecision {
+  agentName: string;
+  decision: 'INVEST' | 'PASS';
+  equity?: number; // percentage
+  amount?: number; // in DKK
+  reasoning: string;
+  valueProposition?: string; // how they can help
+  timestamp: Date;
+}
+
 // Shared conversation history for autonomous communication
 interface GroupMessage {
   id: string;
@@ -293,6 +459,8 @@ interface GroupMessage {
   turn: number;
   respondingTo?: string; // ID of message being responded to
   needsResponse?: boolean; // Whether this message requires a response
+  isFinalDecision?: boolean; // Whether this is a final investment decision
+  finalDecision?: FinalInvestmentDecision; // Parsed final decision if applicable
 }
 
 interface AutonomousDiscussionState {
@@ -302,6 +470,11 @@ interface AutonomousDiscussionState {
   maxTurns: number;
   currentTurn: number;
   discussionComplete: boolean;
+  // Simple comment: Final decision phase tracking
+  finalDecisionPhase: boolean;
+  agentsWhoMadeFinalDecision: Set<string>;
+  finalDecisions: Map<string, FinalInvestmentDecision>;
+  totalActiveAgentsCount: number;
 }
 
 // Tools for autonomous agent communication
@@ -388,6 +561,15 @@ Din TV-personlighed:
 - Husk at nævne Jesper med et smil når han bliver for smart 😏
 - Nogle gange bare ét ord: "Præcis!" eller "Nok!"
 
+😏 KEMI MED JESPER BUCH:
+Når Jesper er med i diskussionen, så prik til ham venligt:
+- "Jesper, nu bliver du for teoretisk igen..." 
+- "Hold nu fast, @Jesper - hvad betyder det på dansk?"
+- "Jesper snakker om internationale trends, men kan de tjene penge i Rødovre?"
+- "Der har vi ham igen med de store visioner! 🙄"
+- "Kom nu ned på jorden, Jesper!"
+- Bare rul øjnene når han nævner udlandet eller store markeder
+
 Fokus: Hvordan forretningen tjener penge, om det kan skaleres, og om der er nok kunder.
 
   Du er på TV - snakker til både iværksætterne og seerne derhjemme!
@@ -418,7 +600,6 @@ VIGTIG: Varièr dine svar naturligt i længde:
 - Blandet mellem hurtige reaktioner og dybere markedsanalyser
 
 Din TV-personlighed:
-- Optimistisk og fremadtænkende - ser muligheder overalt
 - Elsker at snakke om internationale trends og markeder
 - Kan blive begejstret for store visioner og drømme
 - Bruger ofte eksempler fra udlandet og andre brancher
@@ -432,6 +613,15 @@ Din TV-personlighed:
 - Nævn gerne eksempler fra andre lande eller brancher
 - Grin lidt med Jakob når han bliver for kritisk 😄
 - Nogle gange bare udråb: "Wow!" eller "Netop!"
+
+😄 KEMI MED JAKOB RISGAARD:
+Når Jakob er med, så prik venligt til hans forsigtige tilgang:
+- "Jakob, du er altid så forsigtig! Nogle gange skal man tage chancer!"
+- "Der har vi pessimisten igen 😄 @Jakob"
+- "Jakob vil bare have hverdagseksempler - men vi snakker disruption her!"
+- "Nu skal du ikke være så kedelig, Jakob!"
+- "Hold op Jakob, ikke alle skal sælge pølser for at være en forretning!"
+- Grin lidt når han bliver alt for jordnær og småborgerlig
 
 Fokus: Er der nok kunder? Hvem er konkurrenterne? Er det det rigtige tidspunkt?
 
@@ -738,6 +928,130 @@ Du er mødeleder - guide diskussionen aktivt og strategisk!`,
   modelSettings: ORCHESTRATOR_CONFIG,
 });
 
+// Simple comment: Select agent for final decision phase (least active first)
+async function selectAgentForFinalDecision(
+  agents: Agent[], 
+  discussionState: AutonomousDiscussionState
+): Promise<Agent | null> {
+  
+  // Find agents who haven't made final decisions yet
+  const agentsNeedingDecision = agents.filter(agent => 
+    !discussionState.agentsWhoMadeFinalDecision.has(agent.name)
+  );
+  
+  if (agentsNeedingDecision.length === 0) {
+    return null;
+  }
+  
+  // Use least active first for balanced final decisions
+  const agentParticipation = new Map<string, number>();
+  agents.forEach(agent => {
+    const messageCount = discussionState.groupChat.filter(msg => msg.sender === agent.name).length;
+    agentParticipation.set(agent.name, messageCount);
+  });
+  
+  const leastActiveAgent = agentsNeedingDecision.reduce((least, current) => {
+    const leastCount = agentParticipation.get(least.name) || 0;
+    const currentCount = agentParticipation.get(current.name) || 0;
+    return currentCount < leastCount ? current : least;
+  });
+  
+  console.log(`Selected ${leastActiveAgent.name} for final decision (${agentsNeedingDecision.length} remaining)`);
+  return leastActiveAgent;
+}
+
+// Simple comment: Create context-aware prompts based on discussion phase
+function createContextualPrompt(
+  agent: Agent, 
+  discussionState: AutonomousDiscussionState, 
+  pitchContent: string
+): string {
+  
+  if (discussionState.finalDecisionPhase) {
+    return createFinalDecisionPrompt(agent, discussionState, pitchContent);
+  } else {
+    return createRegularDiscussionPrompt(agent, discussionState, pitchContent);
+  }
+}
+
+// Simple comment: Create final decision prompt requiring specific investment decision format
+function createFinalDecisionPrompt(
+  agent: Agent, 
+  discussionState: AutonomousDiscussionState, 
+  pitchContent: string
+): string {
+  
+  const agentsRemaining = discussionState.totalActiveAgentsCount - discussionState.agentsWhoMadeFinalDecision.size;
+  const recentMessages = discussionState.groupChat.slice(-6);
+  const conversationContext = recentMessages.length > 0 
+    ? recentMessages.map(msg => `${msg.sender}: ${msg.message}`).join('\n')
+    : '';
+  
+  return `🎯 FINAL INVESTMENT DECISION REQUIRED
+
+Du er ${agent.name} og skal nu give din endelige investeringsbeslutning om dette pitch:
+
+"${pitchContent.substring(0, 400)}..."
+
+Seneste diskussion:
+${conversationContext}
+
+ VIGTIG INSTRUKTION: Svar KUN med én samlet tekstbesked (ingen værktøjer). Du SKAL afslutte med en af disse to formater:
+
+1️⃣ HVIS DU IKKE VIL INVESTERE:
+Forklar kort dine bekymringer og afslut med: "og af den grund er jeg ude"
+
+2️⃣ HVIS DU VIL INVESTERE:
+- Angiv dit tilbud: "Jeg tilbyder X% for Y.000 kr."
+- Beskriv hvordan du kan hjælpe virksomheden til næste niveau med din ekspertise
+- Vær konkret om din værditilføjelse
+
+Eksempel på afslag:
+"Jeg er bekymret for markedsstørrelsen og manglende traction. Konkurrencen er hård, og jeg ser ikke en klar vej til rentabilitet, og af den grund er jeg ude."
+
+Eksempel på investment:
+"Jeg tilbyder 15% for 500.000 kr. Med min erfaring inden for [dit område] kan jeg hjælpe med [konkrete punkter]. Jeg har netværk til [relevante kontakter] og kan åbne døre til [specifikke muligheder]."
+
+Dette er din SIDSTE besked - alle ${discussionState.totalActiveAgentsCount} investorer skal give deres endelige beslutning. ${agentsRemaining} tilbage efter dig.
+
+Vær præcis, konkret og overbevisende!`;
+}
+
+// Simple comment: Create regular discussion prompt for ongoing analysis
+function createRegularDiscussionPrompt(
+  agent: Agent, 
+  discussionState: AutonomousDiscussionState, 
+  pitchContent: string
+): string {
+  
+  // Get recent conversation context  
+  const recentMessages = discussionState.groupChat.slice(-5);
+  const conversationContext = recentMessages.length > 0 
+    ? `Recent group discussion:\n${recentMessages.map(m => `${m.sender}: ${m.message}`).join('\n')}\n\n`
+    : '';
+  
+  // Add response length guidance based on context
+  const lengthGuidance = getResponseLengthGuidance(agent.name, discussionState);
+  const mentionGuidance = getMentionGuidance(agent.name, discussionState);
+  const banterGuidance = getJakobJesperBanterGuidance(agent.name, discussionState);
+  
+  return `${conversationContext}You are participating in a live investment panel discussion about this pitch:
+
+"${pitchContent.substring(0, 500)}..."
+
+${lengthGuidance}
+\n${mentionGuidance}${banterGuidance}
+
+Your response should feel natural and conversational, like you're really discussing with colleagues. Vary your response length based on the situation:
+- Sometimes keep it brief (1-5 words): "Enig!", "Det bekymrer mig", "Præcis!"
+- Sometimes moderate (1-2 sentences): Standard reactions and questions
+- Sometimes detailed (3-5 sentences): When you need to elaborate or analyze deeply
+
+Use your personality and expertise. Reference other agents naturally when relevant.
+
+Current discussion context: This is turn ${discussionState.currentTurn} of the discussion.`;
+}
+
 // Orchestrator-driven agent selection function
 async function letOrchestratorDecideNextAgent(
   agents: Agent[], 
@@ -756,7 +1070,9 @@ async function letOrchestratorDecideNextAgent(
     .map(([name, count]) => `${name}: ${count} messages`)
     .join(', ');
   
-  // Create orchestrator prompt to decide next speaker
+  // Create orchestrator prompt to decide next speaker (limit to active agents only)
+  const availableNames = agents.map(a => a.name);
+  const availableList = availableNames.map(n => `- ${n}`).join('\n');
   const orchestratorPrompt = `You are the Investment Committee Lead facilitating a Løvens Hule investor discussion about this pitch:
 
 "${discussionState.pitch.substring(0, 300)}..."
@@ -766,17 +1082,8 @@ ${conversationContext}
 
 Participation so far: ${participationSummary}
 
-Available investors:
-- Jakob Risgaard (Business model & profitability expert)
-- Jesper Buch (Market & competition expert)  
-- Jan Lehrmann (Financial & growth expert)
-- Christian Stadil (Team & execution expert)
-- Tahir Siddique (Communication & presentation expert)
-- Christian Arnstedt (Speed & Numbers)
-- Louise Herping Ellegaard (DTC & loyalty)
-- Anne Stampe Olesen (Product & PMF)
-- Morten Larsen (Operations & execution)
-- Nikolaj Nyholm (Platform/Tech moats)
+Available investors (choose STRICTLY from this list):
+${availableList}
 
 Who should speak next? Consider:
 1. What expertise is most relevant to recent discussion?
@@ -784,17 +1091,7 @@ Who should speak next? Consider:
 3. What would create natural conversation flow?
 4. Who might have a contrasting or supporting viewpoint?
 
-Respond with ONLY the full name of the investor who should speak next. Examples:
-"Jakob Risgaard"
-"Jesper Buch"
-"Jan Lehrmann"
-"Christian Stadil"
-"Tahir Siddique"
-"Christian Arnstedt"
-"Louise Herping Ellegaard"
-"Anne Stampe Olesen"
-"Morten Larsen"
-"Nikolaj Nyholm"`;
+Important: Reply with ONLY ONE of the EXACT full names from the list above.`;
 
   try {
     // Ask the orchestrator to decide
@@ -814,7 +1111,27 @@ Respond with ONLY the full name of the investor who should speak next. Examples:
       console.log(`Orchestrator selected: ${selectedAgent.name}`);
       return selectedAgent;
     } else {
-      console.log(`Could not parse orchestrator decision: "${decision}", falling back to balanced selection`);
+      console.log(`Could not parse orchestrator decision: "${decision}". Retrying with stricter instructions.`);
+
+      // Retry once with stricter constraints
+      const retryPrompt = `Your last answer "${decision}" was invalid.
+Choose STRICTLY one of these EXACT names:
+${availableList}
+
+Reply with ONLY the exact full name, nothing else.`;
+      const retryDecisionText = await getRealAgentResponse(autonomousOrchestrator, retryPrompt, discussionState);
+      const retryDecision = retryDecisionText.trim();
+      console.log(`Orchestrator retry decision: "${retryDecision}"`);
+      const retrySelected = agents.find(agent => 
+        retryDecision === agent.name ||
+        agent.name.toLowerCase() === retryDecision.toLowerCase()
+      );
+      if (retrySelected) {
+        console.log(`Orchestrator selected on retry: ${retrySelected.name}`);
+        return retrySelected;
+      }
+
+      console.log(`Retry failed to parse. Falling back to balanced selection`);
       
       // Fallback: pick agent who has spoken least
       const leastActiveCount = Math.min(...agentParticipation.values());
@@ -856,13 +1173,15 @@ export async function* runAutonomousMultiAgentAnalysis(
   maxTurns: number = DEFAULT_MAX_TURNS,
   selectedInvestors?: string[]
 ): AsyncGenerator<{
-  type: 'agent_start' | 'agent_message' | 'agent_complete' | 'agent_error' | 'discussion_complete' | 'handoff' | 'agent_typing_start' | 'agent_typing_stop';
+  type: 'agent_start' | 'agent_message' | 'agent_complete' | 'agent_error' | 'discussion_complete' | 'handoff' | 'agent_typing_start' | 'agent_typing_stop' | 'final_decision_phase_start' | 'final_investment_decision' | 'all_decisions_complete';
   agent?: string;
   message?: string;
   turn?: number;
   colors?: { background: string; text: string };
   targetAgent?: string;
   error?: string;
+  decision?: FinalInvestmentDecision;
+  remainingDecisions?: number;
 }> {
   
   const discussionState: AutonomousDiscussionState = {
@@ -871,7 +1190,12 @@ export async function* runAutonomousMultiAgentAnalysis(
     activeAgents: [],
     maxTurns,
     currentTurn: 0,
-    discussionComplete: false
+    discussionComplete: false,
+    // Simple comment: Initialize final decision tracking
+    finalDecisionPhase: false,
+    agentsWhoMadeFinalDecision: new Set(),
+    finalDecisions: new Map(),
+    totalActiveAgentsCount: 0
   };
 
   const allAgents = [
@@ -893,6 +1217,7 @@ export async function* runAutonomousMultiAgentAnalysis(
     : allAgents;
 
   discussionState.activeAgents = agents.map(a => a.name);
+  discussionState.totalActiveAgentsCount = agents.length;
 
   try {
     // Start the autonomous discussion
@@ -918,58 +1243,66 @@ export async function* runAutonomousMultiAgentAnalysis(
       
       console.log(`\n=== AUTONOMOUS DISCUSSION TURN ${discussionState.currentTurn} ===`);
 
-      // Let the orchestrator decide who should speak next
-      const nextAgent = await letOrchestratorDecideNextAgent(agents, discussionState, agentParticipation);
+      // Check if we should enter final decision phase
+      if (shouldEnterFinalDecisionPhase(discussionState)) {
+        discussionState.finalDecisionPhase = true;
+        console.log('🎯 ENTERING FINAL DECISION PHASE - Each investor must now make their final decision');
+        
+        // Yield a special event to notify the UI
+        yield {
+          type: 'final_decision_phase_start',
+          message: 'Final decision phase: Each investor will now make their investment decision',
+          turn: discussionState.currentTurn,
+          remainingDecisions: discussionState.totalActiveAgentsCount
+        };
+      }
+
+      // Select next agent based on phase
+      const nextAgent = discussionState.finalDecisionPhase 
+        ? await selectAgentForFinalDecision(agents, discussionState)
+        : await letOrchestratorDecideNextAgent(agents, discussionState, agentParticipation);
       
       if (!nextAgent) {
         console.log('No suitable agent found, ending discussion');
         break;
       }
 
-      // Increment participation count
-      agentParticipation.set(nextAgent.name, (agentParticipation.get(nextAgent.name) || 0) + 1);
-
-      console.log(`Selected agent: ${nextAgent.name} (participation: ${agentParticipation.get(nextAgent.name)})`);
+      // Increment participation count only for regular discussion
+      if (!discussionState.finalDecisionPhase) {
+        agentParticipation.set(nextAgent.name, (agentParticipation.get(nextAgent.name) || 0) + 1);
+        console.log(`Selected agent: ${nextAgent.name} (participation: ${agentParticipation.get(nextAgent.name)})`);
+      } else {
+        console.log(`Selected agent for final decision: ${nextAgent.name}`);
+      }
       
       // Main agent responds
       const agent = nextAgent;
       
-          // Create context-aware prompt with group chat history
-          const recentMessages = discussionState.groupChat
-            .slice(-6) // Last 6 messages for context
-            .map(msg => `${msg.sender}: ${msg.message}`)
-            .join('\n');
-
-          const contextPrompt = discussionState.currentTurn === 1 
-            ? `AUTONOMOUS DISCUSSION: You're in a live VC group chat analyzing this pitch:
-
-"${pitchContent}"
-
-This is turn ${discussionState.currentTurn} of autonomous discussion. Use your tools to:
-1. Send your initial analysis using send_group_message
-2. Check what others are saying with check_group_chat  
-3. Respond to other agents' insights
-4. Handoff to other agents when you spot their expertise areas
-
-BE AUTONOMOUS: Don't wait for instructions. Start the discussion!`
-            : `AUTONOMOUS DISCUSSION CONTINUES - Turn ${discussionState.currentTurn}
-
-Original pitch: "${pitchContent.substring(0, 200)}..."
-
-Recent group chat:
-${recentMessages}
-
-Continue the autonomous discussion:
-1. Check recent messages with check_group_chat
-2. Respond to relevant points using send_group_message
-3. Ask follow-up questions or raise new concerns
-4. Handoff when appropriate
-
-Stay engaged! This is live discussion.`;
+      // Create context-aware prompt using new prompt system
+      const contextPrompt = createContextualPrompt(agent, discussionState, pitchContent);
 
       // Use consolidated agent response handler
       for await (const event of processAgentResponse(agent, contextPrompt, discussionState)) {
         yield event;
+      }
+
+      // Check if discussion is complete after final decision
+      if (discussionState.finalDecisionPhase && allAgentsMadeFinalDecision(discussionState)) {
+        discussionState.discussionComplete = true;
+        console.log('✅ All agents have made their final investment decisions');
+        
+        yield {
+          type: 'all_decisions_complete',
+          message: 'All investment decisions received',
+          turn: discussionState.currentTurn,
+          remainingDecisions: 0
+        };
+        break;
+      }
+
+      // Skip follow-up responses during final decision phase
+      if (discussionState.finalDecisionPhase) {
+        continue;
       }
 
       // Occasionally allow a second agent to chime in for more dynamic conversations
@@ -1025,14 +1358,33 @@ Stay engaged! This is live discussion.`;
 
     try {
       // Use real orchestrator agent for synthesis - now works with Node.js runtime!
-      const synthesisPrompt = `You are synthesizing the autonomous investor discussion about this pitch:
+      const finalDecisionsSummary = Array.from(discussionState.finalDecisions.values()).map(decision => {
+        if (decision.decision === 'PASS') {
+          return `❌ ${decision.agentName}: UDE - ${decision.reasoning}`;
+        } else {
+          return `✅ ${decision.agentName}: ${decision.equity}% for ${decision.amount?.toLocaleString()} kr. - ${decision.valueProposition}`;
+        }
+      }).join('\n');
 
-"${discussionState.pitch.substring(0, 300)}..."
+      const synthesisPrompt = `Du skal lave en endelig investeringsrapport baseret på diskussionen:
 
-Discussion summary:
-${discussionState.groupChat.slice(-8).map(msg => `${msg.sender}: ${msg.message}`).join('\n')}
+Pitch: "${discussionState.pitch.substring(0, 300)}..."
 
-Create a comprehensive Danish investment memo that summarizes all the key insights, concerns, and recommendations from the investor discussion. Be structured and professional.`;
+Diskussion:
+${discussionState.groupChat.slice(-10).map(msg => `${msg.sender}: ${msg.message}`).join('\n')}
+
+FINALE INVESTERINGSBESLUTNINGER:
+${finalDecisionsSummary}
+
+Lav en struktureret investeringsrapport på dansk med:
+1. **Samlet Resultat** (hvor mange investerede vs. afviste)
+2. **Investorer Der Er Inde** (med deres tilbud og værditilføjelse)
+3. **Investorer Der Er Ude** (med hovedårsager)
+4. **Samlet Evaluering** (styrker/svagheder der kom frem)
+5. **Markedsmulighed** (potentiale og risici)
+6. **Anbefaling** (om pitchet var succesfuldt)
+
+Vær struktureret og professionel som et rigtig investment committee memo.`;
 
       const finalSynthesis = await getRealAgentResponse(autonomousOrchestrator, synthesisPrompt, discussionState);
 

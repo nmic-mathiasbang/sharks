@@ -252,6 +252,18 @@ export function SimplePitchChat({
                   });
                   break;
 
+                case 'final_investment_decision':
+                  addMessage(
+                    'assistant',
+                    String(eventData.message || ''),
+                    false,
+                    eventData.agent,
+                    eventData.colors,
+                    false
+                  );
+                  break;
+
+
                 case 'error':
                   throw new Error(eventData.error || 'Stream error occurred');
               }

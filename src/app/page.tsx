@@ -172,7 +172,7 @@ export default function Home() {
       />
       <main ref={formRef} className="relative z-10 w-full flex flex-col items-center space-y-6">
         <h1 className="text-center text-5xl sm:text-6xl font-extrabold tracking-tight text-black">
-        Tænk hvis din pitchdeck blev kastet for løverne!
+        Tænk hvis din pitch blev kastet for løverne!
         </h1>
         <div className="text-center">
         </div>

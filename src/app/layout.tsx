@@ -13,8 +13,11 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Analyze Pitch",
+  title: "Løvens Hule",
   description: "Clean and minimalistic pitch analysis tool",
+  icons: {
+    icon: "/assets/WhatsApp.png",
+  },
 };
 
 export default function RootLayout({

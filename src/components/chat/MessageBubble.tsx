@@ -10,21 +10,32 @@ export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   const isOrchestrator = message.agentName === 'Pitch Analysis Orchestrator';
 
-  // Simple comment: Highlight @mentions (e.g., @Jesper-Buch, @alle) with bold
-  const renderWithMentions = (text: string) => {
+  // Simple comment: Rich text renderer that bolds @mentions and the phrase "og af den grund er jeg ude."
+  const renderRichText = (text: string) => {
     const parts: React.ReactNode[] = [];
-    const regex = /@([A-Za-zÀ-ÖØ-öø-ÿ-]+)/g; // Danish letters + hyphenated names
+    // Match either @mentions or the final decision phrase (case-insensitive, optional trailing period)
+    const regex = /(@[A-Za-zÀ-ÖØ-öø-ÿ-]+)|(og af den grund er jeg ude\.?)/gi;
     let lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = regex.exec(text)) !== null) {
       const start = match.index;
       const full = match[0];
       if (start > lastIndex) parts.push(text.slice(lastIndex, start));
-      parts.push(
-        <span key={`m-${start}`} className="font-semibold">
-          {full}
-        </span>
-      );
+      if (full.startsWith('@')) {
+        // Simple comment: Bold @mentions slightly
+        parts.push(
+          <span key={`m-${start}`} className="font-semibold">
+            {full}
+          </span>
+        );
+      } else {
+        // Simple comment: Strongly bold the pass phrase to make it stand out
+        parts.push(
+          <span key={`p-${start}`} className="font-bold">
+            {full.endsWith('.') ? full : `${full}.`}
+          </span>
+        );
+      }
       lastIndex = start + full.length;
     }
     if (lastIndex < text.length) parts.push(text.slice(lastIndex));
@@ -90,7 +101,7 @@ export function MessageBubble({ message }: { message: Message }) {
                 <div className="text-sm leading-relaxed whitespace-pre-wrap">
                   {message.content.split('\n').map((line, idx, arr) => (
                     <React.Fragment key={`l-${idx}`}>
-                      {renderWithMentions(line)}
+                      {renderRichText(line)}
                       {idx < arr.length - 1 ? <br /> : null}
                     </React.Fragment>
                   ))}
